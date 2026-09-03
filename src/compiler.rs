@@ -14,6 +14,15 @@ use indexmap::IndexMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// The icon sets compiled beside the primary `--app-icon`: Xcode's
+/// `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` (`--alternate-app-icon`, repeated) and
+/// `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS` (`--include-all-app-icons`).
+#[derive(Debug, Clone, Default)]
+pub struct IconSelection {
+    pub alternate_app_icons: Vec<String>,
+    pub include_all_app_icons: bool,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn compile_catalog(
     xcassets_path: &Path,
@@ -21,6 +30,42 @@ pub fn compile_catalog(
     platform: &str,
     min_deploy: &str,
     app_icon: Option<&str>,
+    info_plist_path: Option<&Path>,
+    accent_color: Option<&str>,
+    widget_background_color: Option<&str>,
+    standalone_icon_behavior: &str,
+    include_languages: Option<Vec<String>>,
+    development_region: Option<String>,
+    plist_localizations: bool,
+) -> Result<Vec<PathBuf>> {
+    compile_catalog_with_icons(
+        xcassets_path,
+        output_dir,
+        platform,
+        min_deploy,
+        app_icon,
+        &IconSelection::default(),
+        info_plist_path,
+        accent_color,
+        widget_background_color,
+        standalone_icon_behavior,
+        include_languages,
+        development_region,
+        plist_localizations,
+    )
+}
+
+/// `compile_catalog` with alternate icon sets: every selected `.appiconset` lands in the car,
+/// each gets its loose home-screen PNGs, and the iOS partial Info.plist lists the alternates
+/// under `CFBundleAlternateIcons` beside the primary, as Apple's actool writes them.
+#[allow(clippy::too_many_arguments)]
+pub fn compile_catalog_with_icons(
+    xcassets_path: &Path,
+    output_dir: &Path,
+    platform: &str,
+    min_deploy: &str,
+    app_icon: Option<&str>,
+    icons: &IconSelection,
     info_plist_path: Option<&Path>,
     accent_color: Option<&str>,
     widget_background_color: Option<&str>,
@@ -39,6 +84,10 @@ pub fn compile_catalog(
         app_icon.map(|s| s.to_string()),
         include_languages,
         development_region,
+    )
+    .with_icon_selection(
+        icons.alternate_app_icons.clone(),
+        icons.include_all_app_icons,
     );
     let (mut renditions, facets) = catalog.parse()?;
 
@@ -361,11 +410,14 @@ pub fn compile_catalog(
     if let Some(icon_name) = app_icon {
         if car::is_idiom_platform(platform) {
             // iOS home-screen icons are emitted as loose PNGs (one per idiom,
-            // at @2x) alongside the CAR — not as an .icns bundle.
-            for loose in ios_loose_icons(&catalog.get_appicon_images()?, icon_name) {
-                let dest = output_dir.join(&loose.filename);
-                fs::copy(&loose.src, &dest)?;
-                output_files.push(fs::canonicalize(&dest).unwrap_or(dest));
+            // at @2x) alongside the CAR — not as an .icns bundle. Alternate
+            // sets get theirs too, so setAlternateIconName finds a file.
+            for set_name in catalog.app_icon_set_names() {
+                for loose in ios_loose_icons(&catalog.app_icon_images_for(&set_name)?, &set_name) {
+                    let dest = output_dir.join(&loose.filename);
+                    fs::copy(&loose.src, &dest)?;
+                    output_files.push(fs::canonicalize(&dest).unwrap_or(dest));
+                }
             }
         } else if standalone_icon_behavior != "none" {
             let icons = catalog.get_icon_images()?;
@@ -388,7 +440,14 @@ pub fn compile_catalog(
             Vec::new()
         };
         if let (true, Some(icon_name)) = (car::is_idiom_platform(platform), app_icon) {
-            write_ios_icon_plist(path, icon_name, &catalog.get_appicon_images()?)?;
+            let mut alternates = Vec::new();
+            for set_name in catalog.app_icon_set_names() {
+                if set_name != icon_name {
+                    let images = catalog.app_icon_images_for(&set_name)?;
+                    alternates.push((set_name, images));
+                }
+            }
+            write_ios_icon_plist(path, icon_name, &catalog.get_appicon_images()?, &alternates)?;
         } else {
             write_info_plist(
                 path,
@@ -569,28 +628,41 @@ fn ios_icon_files(icons: &[IconImage], name: &str, idiom: &str) -> Vec<String> {
     }
 }
 
+/// `CFBundleIconFiles` for one icon set and idiom. iPad lists its own primary
+/// (preceded by the iPhone fallback) only when it actually ships an iPad icon;
+/// with no iPad icons the dict carries just the name, matching host actool.
+fn ios_idiom_files(icons: &[IconImage], name: &str, idiom: &str) -> Vec<String> {
+    let iphone_files = ios_icon_files(icons, name, "iphone");
+    if idiom == "iphone" {
+        return iphone_files;
+    }
+    let ipad_primary = ios_icon_files(icons, name, idiom);
+    if ipad_primary.is_empty() {
+        Vec::new()
+    } else {
+        let mut v = iphone_files;
+        v.extend(ipad_primary);
+        v
+    }
+}
+
 /// iOS partial Info.plist: a `CFBundleIcons` (iPhone primary) and
 /// `CFBundleIcons~ipad` dict, each carrying `CFBundleIconName` and — when the
 /// idiom has home-screen icons — `CFBundleIconFiles`. The iPad list inherits
 /// the iPhone primaries (iPad falls back to them), matching host actool.
-fn write_ios_icon_plist(path: &Path, name: &str, icons: &[IconImage]) -> Result<()> {
+/// Alternate sets are listed under `CFBundleAlternateIcons`, keyed by set name,
+/// each with the same two keys, which is the shape `setAlternateIconName` reads.
+fn write_ios_icon_plist(
+    path: &Path,
+    name: &str,
+    icons: &[IconImage],
+    alternates: &[(String, Vec<IconImage>)],
+) -> Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)?;
         }
     }
-    let iphone_files = ios_icon_files(icons, name, "iphone");
-    // iPad lists its own primary (preceded by the iPhone fallback) only when it
-    // actually ships an iPad icon; with no iPad icons the dict carries just the
-    // name, matching host actool.
-    let ipad_primary = ios_icon_files(icons, name, "ipad");
-    let ipad_files = if ipad_primary.is_empty() {
-        Vec::new()
-    } else {
-        let mut v = iphone_files.clone();
-        v.extend(ipad_primary);
-        v
-    };
 
     let mut lines = vec![
         r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
@@ -598,26 +670,46 @@ fn write_ios_icon_plist(path: &Path, name: &str, icons: &[IconImage]) -> Result<
         r#"<plist version="1.0">"#.to_string(),
         "<dict>".to_string(),
     ];
-    let mut emit_primary = |key: &str, files: &[String]| {
+    let emit_icon = |lines: &mut Vec<String>, indent: &str, icon_name: &str, files: &[String]| {
+        lines.push(format!("{indent}<dict>"));
+        if !files.is_empty() {
+            lines.push(format!("{indent}\t<key>CFBundleIconFiles</key>"));
+            lines.push(format!("{indent}\t<array>"));
+            for f in files {
+                lines.push(format!("{indent}\t\t<string>{f}</string>"));
+            }
+            lines.push(format!("{indent}\t</array>"));
+        }
+        lines.push(format!("{indent}\t<key>CFBundleIconName</key>"));
+        lines.push(format!("{indent}\t<string>{icon_name}</string>"));
+        lines.push(format!("{indent}</dict>"));
+    };
+    for (key, idiom) in [("CFBundleIcons", "iphone"), ("CFBundleIcons~ipad", "ipad")] {
         lines.push(format!("\t<key>{key}</key>"));
         lines.push("\t<dict>".to_string());
-        lines.push("\t\t<key>CFBundlePrimaryIcon</key>".to_string());
-        lines.push("\t\t<dict>".to_string());
-        if !files.is_empty() {
-            lines.push("\t\t\t<key>CFBundleIconFiles</key>".to_string());
-            lines.push("\t\t\t<array>".to_string());
-            for f in files {
-                lines.push(format!("\t\t\t\t<string>{f}</string>"));
+        if !alternates.is_empty() {
+            lines.push("\t\t<key>CFBundleAlternateIcons</key>".to_string());
+            lines.push("\t\t<dict>".to_string());
+            for (alternate, alternate_icons) in alternates {
+                lines.push(format!("\t\t\t<key>{alternate}</key>"));
+                emit_icon(
+                    &mut lines,
+                    "\t\t\t",
+                    alternate,
+                    &ios_idiom_files(alternate_icons, alternate, idiom),
+                );
             }
-            lines.push("\t\t\t</array>".to_string());
+            lines.push("\t\t</dict>".to_string());
         }
-        lines.push("\t\t\t<key>CFBundleIconName</key>".to_string());
-        lines.push(format!("\t\t\t<string>{name}</string>"));
-        lines.push("\t\t</dict>".to_string());
+        lines.push("\t\t<key>CFBundlePrimaryIcon</key>".to_string());
+        emit_icon(
+            &mut lines,
+            "\t\t",
+            name,
+            &ios_idiom_files(icons, name, idiom),
+        );
         lines.push("\t</dict>".to_string());
-    };
-    emit_primary("CFBundleIcons", &iphone_files);
-    emit_primary("CFBundleIcons~ipad", &ipad_files);
+    }
     lines.push("</dict>".to_string());
     lines.push("</plist>".to_string());
     lines.push(String::new());

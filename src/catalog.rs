@@ -263,6 +263,12 @@ pub struct AssetCatalog {
     pub platform: String,
     pub min_deploy: String,
     pub app_icon: Option<String>,
+    /// Further `.appiconset`s compiled beside the primary one (`--alternate-app-icon`), the
+    /// sets the app can switch to at runtime.
+    pub alternate_app_icons: Vec<String>,
+    /// `--include-all-app-icons`: every `.appiconset` in the catalog is compiled, not only
+    /// the named ones.
+    pub include_all_app_icons: bool,
     pub include_languages: Option<Vec<String>>,
     pub development_region: Option<String>,
     identifiers: IndexMap<String, u16>,
@@ -314,6 +320,8 @@ impl AssetCatalog {
             platform,
             min_deploy,
             app_icon,
+            alternate_app_icons: Vec::new(),
+            include_all_app_icons: false,
             include_languages,
             development_region,
             identifiers: IndexMap::new(),
@@ -322,6 +330,56 @@ impl AssetCatalog {
             loose_jpegs: Vec::new(),
             jpeg_in_car,
         }
+    }
+
+    /// Select the icon sets compiled beside the primary one.
+    pub fn with_icon_selection(
+        mut self,
+        alternate_app_icons: Vec<String>,
+        include_all_app_icons: bool,
+    ) -> Self {
+        self.alternate_app_icons = alternate_app_icons;
+        self.include_all_app_icons = include_all_app_icons;
+        self
+    }
+
+    /// Whether an `.appiconset` of this name is compiled: the primary, a named alternate, or
+    /// any set at all when every icon set was asked for.
+    pub fn wants_app_icon_set(&self, name: &str) -> bool {
+        self.app_icon.as_deref() == Some(name)
+            || self
+                .alternate_app_icons
+                .iter()
+                .any(|alternate| alternate == name)
+            || (self.include_all_app_icons && self.app_icon.is_some())
+    }
+
+    /// Every icon set this compile writes, primary first, then the named alternates, then
+    /// (when every set was asked for) the remaining `.appiconset`s found in the catalog, in
+    /// path order. The primary is never repeated.
+    pub fn app_icon_set_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        if let Some(primary) = &self.app_icon {
+            names.push(primary.clone());
+        } else {
+            return names;
+        }
+        for alternate in &self.alternate_app_icons {
+            if !names.contains(alternate) {
+                names.push(alternate.clone());
+            }
+        }
+        if self.include_all_app_icons {
+            let mut found = Vec::new();
+            collect_appiconsets(&self.path, &mut found);
+            found.sort();
+            for name in found {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+        names
     }
 
     pub fn get_locales_used(&self) -> Vec<String> {
@@ -725,12 +783,8 @@ impl AssetCatalog {
         renditions: &mut Vec<Rendition>,
         facets: &mut IndexMap<String, Facet>,
     ) -> Result<()> {
-        let app_icon = match &self.app_icon {
-            Some(v) => v.clone(),
-            None => return Ok(()),
-        };
         let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
-        if name != app_icon {
+        if !self.wants_app_icon_set(&name) {
             return Ok(());
         }
         let ident = self.get_identifier(&name);
@@ -1352,11 +1406,15 @@ impl AssetCatalog {
     /// size). Unlike `get_icon_images` (macOS .icns input) this keeps the
     /// idiom string and the declared point width, and skips vector sources.
     pub fn get_appicon_images(&self) -> Result<Vec<IconImage>> {
-        let app_icon = match &self.app_icon {
-            Some(v) => v.clone(),
-            None => return Ok(Vec::new()),
-        };
-        let icon_dir = self.path.join(format!("{app_icon}.appiconset"));
+        match &self.app_icon {
+            Some(primary) => self.app_icon_images_for(primary),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// The same listing for any one icon set, primary or alternate.
+    pub fn app_icon_images_for(&self, set_name: &str) -> Result<Vec<IconImage>> {
+        let icon_dir = self.path.join(format!("{set_name}.appiconset"));
         let contents_path = icon_dir.join("Contents.json");
         if !contents_path.exists() {
             return Ok(Vec::new());
@@ -1528,5 +1586,27 @@ mod tests {
         let data = vec![0xFF, 0x00, 0x00, 0xFF];
         let (_, _, _, fmt) = bgra_to_best_format(data, 1, 1, false);
         assert_eq!(&fmt, b"BGRA");
+    }
+}
+
+/// Names of every `.appiconset` under `dir`, recursing into folders as the parser does.
+fn collect_appiconsets(dir: &Path, out: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.filter_map(|entry| entry.ok()) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        match path.extension().and_then(|ext| ext.to_str()) {
+            Some("appiconset") => {
+                if let Some(stem) = path.file_stem() {
+                    out.push(stem.to_string_lossy().to_string());
+                }
+            }
+            Some(_) => {}
+            None => collect_appiconsets(&path, out),
+        }
     }
 }
