@@ -213,12 +213,22 @@ fn main() -> ExitCode {
             }
         }
     } else {
-        match compiler::compile_catalog(
+        let icons = compiler::IconSelection {
+            alternate_app_icons: cli
+                .alternate_app_icon
+                .iter()
+                .filter(|name| !name.is_empty())
+                .cloned()
+                .collect(),
+            include_all_app_icons: cli.include_all_app_icons,
+        };
+        match compiler::compile_catalog_with_icons(
             &document,
             &compile_dir,
             &cli.platform,
             &cli.minimum_deployment_target,
             cli.app_icon.as_deref(),
+            &icons,
             cli.output_partial_info_plist.as_deref(),
             cli.accent_color.as_deref(),
             cli.widget_background_color.as_deref(),
