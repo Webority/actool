@@ -415,7 +415,14 @@ pub fn compile_catalog_with_icons(
             for set_name in catalog.app_icon_set_names() {
                 for loose in ios_loose_icons(&catalog.app_icon_images_for(&set_name)?, &set_name) {
                     let dest = output_dir.join(&loose.filename);
-                    fs::copy(&loose.src, &dest)?;
+                    match loose.resample_px {
+                        Some(px) => image::open(&loose.src)?
+                            .resize_exact(px, px, image::imageops::FilterType::Lanczos3)
+                            .save_with_format(&dest, image::ImageFormat::Png)?,
+                        None => {
+                            fs::copy(&loose.src, &dest)?;
+                        }
+                    }
                     output_files.push(fs::canonicalize(&dest).unwrap_or(dest));
                 }
             }
@@ -587,6 +594,7 @@ fn ios_primary_size(idiom: &str) -> Option<u32> {
 struct LooseIcon {
     filename: String,
     src: PathBuf,
+    resample_px: Option<u32>,
 }
 
 /// Loose home-screen PNGs actool drops next to the CAR: the @2x primary icon
@@ -612,6 +620,7 @@ fn ios_loose_icons(icons: &[IconImage], name: &str) -> Vec<LooseIcon> {
         out.push(LooseIcon {
             filename: format!("{name}{primary}x{primary}@2x{suffix}.{ext}"),
             src: img.path.clone(),
+            resample_px: img.resample_px,
         });
     }
     out

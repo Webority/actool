@@ -1,0 +1,93 @@
+[
+  {
+    "Appearances" : {
+      "UIAppearanceAny" : 0
+    },
+    "AssetStorageVersion" : "Xcode 26.5 (17F42) via AssetCatalogSimulatorAgent",
+    "Authoring Tool" : "@(#)PROGRAM:CoreThemeDefinition  PROJECT:CoreThemeDefinition-653.4  [IIO-2784.5.4]",
+    "CoreUIVersion" : 975,
+    "DumpToolVersion" : 975,
+    "Key Format" : [
+      "kCRThemeScaleName",
+      "kCRThemeIdiomName",
+      "kCRThemeSubtypeName",
+      "kCRThemeDimension2Name",
+      "kCRThemeIdentifierName",
+      "kCRThemeElementName",
+      "kCRThemePartName",
+      "kCRThemeStateName"
+    ],
+    "MainVersion" : "@(#)PROGRAM:CoreUI  PROJECT:CoreUI-975",
+    "Platform" : "ios",
+    "PlatformVersion" : "15.1",
+    "SchemaVersion" : 2,
+    "StorageVersion" : 17,
+    "Timestamp" : 1792307954
+  },
+  {
+    "AssetType" : "Icon Image",
+    "BitsPerComponent" : 8,
+    "ColorModel" : "RGB",
+    "Colorspace" : "srgb",
+    "Compression" : "lzfse",
+    "Encoding" : "ARGB",
+    "Icon Index" : 1,
+    "Idiom" : "phone",
+    "Name" : "AppIcon",
+    "NameIdentifier" : 6849,
+    "Opaque" : true,
+    "PixelHeight" : 1024,
+    "PixelWidth" : 1024,
+    "RenditionName" : "icon1024.png",
+    "Scale" : 1,
+    "SHA1Digest" : "71189BDB2DD57BEEE27C61629D65000C3DFDF3149603DDF5EA6F020BDD79FA69",
+    "SizeOnDisk" : 3459,
+    "State" : "Normal"
+  },
+  {
+    "AssetType" : "Icon Image",
+    "BitsPerComponent" : 8,
+    "ColorModel" : "RGB",
+    "Colorspace" : "srgb",
+    "Compression" : "lzfse",
+    "Encoding" : "ARGB",
+    "Icon Index" : 1,
+    "Idiom" : "pad",
+    "Name" : "AppIcon",
+    "NameIdentifier" : 6849,
+    "Opaque" : true,
+    "PixelHeight" : 1024,
+    "PixelWidth" : 1024,
+    "RenditionName" : "icon1024.png",
+    "Scale" : 1,
+    "SHA1Digest" : "71189BDB2DD57BEEE27C61629D65000C3DFDF3149603DDF5EA6F020BDD79FA69",
+    "SizeOnDisk" : 3459,
+    "State" : "Normal"
+  },
+  {
+    "AssetType" : "MultiSized Image",
+    "Idiom" : "phone",
+    "Name" : "AppIcon",
+    "NameIdentifier" : 6849,
+    "Scale" : 1,
+    "SHA1Digest" : "8E49D581FF1D34636A0ECFFD14AD9B1285DB705B1278A7F599E196C35454BDA3",
+    "SizeOnDisk" : 236,
+    "Sizes" : [
+      "1024x1024 index:1 idiom:phone"
+    ],
+    "State" : "Normal"
+  },
+  {
+    "AssetType" : "MultiSized Image",
+    "Idiom" : "pad",
+    "Name" : "AppIcon",
+    "NameIdentifier" : 6849,
+    "Scale" : 1,
+    "SHA1Digest" : "8E49D581FF1D34636A0ECFFD14AD9B1285DB705B1278A7F599E196C35454BDA3",
+    "SizeOnDisk" : 236,
+    "Sizes" : [
+      "1024x1024 index:1 idiom:pad"
+    ],
+    "State" : "Normal"
+  }
+]

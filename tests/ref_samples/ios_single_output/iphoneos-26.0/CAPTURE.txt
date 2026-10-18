@@ -1,0 +1,5 @@
+Captured 2026-10-18T07:19:16Z by tools/capture-ios-single-icon.sh
+xcodebuild -version: Xcode 26.5 Build version 17F42 
+actool: /Applications/Xcode.app/Contents/Developer/usr/bin/actool
+exit status: 0
+command: actool --output-format human-readable-text --notices --warnings --output-partial-info-plist tests/ref_samples/ios_single_output/iphoneos-26.0/partial.plist --app-icon AppIcon --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphoneos --compile tests/ref_samples/ios_single_output/iphoneos-26.0/compiled tests/ref_samples/IosSingleIcon.xcassets

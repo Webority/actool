@@ -519,3 +519,79 @@ fn ios_appicon_no_subtype_without_60pt_at_3x() {
     }
     assert!(!any_1792, "no subtype-1792 expected without a 60pt@3x icon");
 }
+
+/// Xcode's single-size icon (one universal `ios` 1024 image) compiles as
+/// Apple's actool does in tests/ref_samples/ios_single_output: the 1024
+/// image under the phone and pad idioms at icon index 1, a MultiSized facet
+/// per idiom, the two resampled home-screen PNGs, and the same partial plist.
+#[test]
+fn ios_single_size_appicon_matches_actool() {
+    let reference = Path::new("tests/ref_samples/ios_single_output");
+    for (case, platform, target) in [
+        ("iphoneos-15.1", "iphoneos", "15.1"),
+        ("iphoneos-26.0", "iphoneos", "26.0"),
+        ("iphonesimulator-15.1", "iphonesimulator", "15.1"),
+    ] {
+        let out = workspace_tmp(&format!("ios_single_{case}"));
+        let plist = out.join("partial.plist");
+        compiler::compile_catalog(
+            Path::new("tests/ref_samples/IosSingleIcon.xcassets"),
+            &out,
+            platform,
+            target,
+            Some("AppIcon"),
+            Some(&plist),
+            None,
+            None,
+            "default",
+            None,
+            None,
+            true,
+        )
+        .expect("compile");
+
+        for (file, px) in [
+            ("AppIcon60x60@2x.png", 120),
+            ("AppIcon76x76@2x~ipad.png", 152),
+        ] {
+            let img = image::open(out.join(file)).unwrap_or_else(|e| panic!("{case} {file}: {e}"));
+            assert_eq!((img.width(), img.height()), (px, px), "{case} {file}");
+        }
+        assert_eq!(
+            std::fs::read_to_string(&plist).unwrap(),
+            std::fs::read_to_string(reference.join(case).join("partial.plist")).unwrap(),
+            "{case} partial plist"
+        );
+
+        let car = std::fs::read(out.join("Assets.car")).expect("car");
+        let kf = keyformat(&car);
+        let col = |t: u32| kf.iter().position(|k| *k == t).unwrap();
+        let (part, idiom, d2, scale) = (col(2), col(15), col(9), col(12));
+        let mut icons = std::collections::BTreeSet::new();
+        let mut multisized = std::collections::BTreeSet::new();
+        for i in (0..car.len().saturating_sub(kf.len() * 2)).step_by(2) {
+            let c: Vec<u16> = (0..kf.len())
+                .map(|x| u16::from_le_bytes(car[i + x * 2..i + x * 2 + 2].try_into().unwrap()))
+                .collect();
+            if c[0] != 0 || c[1] != 0 || !(1..=2).contains(&c[idiom]) {
+                continue;
+            }
+            if c[part] == 220 && c[scale] == 1 && c[d2] == 1 {
+                icons.insert(c[idiom]);
+            }
+            if c[part] == 218 {
+                multisized.insert(c[idiom]);
+            }
+        }
+        assert_eq!(
+            icons,
+            [1, 2].into(),
+            "{case}: 1024 icon under phone and pad at index 1"
+        );
+        assert_eq!(
+            multisized,
+            [1, 2].into(),
+            "{case}: a MultiSized facet per idiom"
+        );
+    }
+}

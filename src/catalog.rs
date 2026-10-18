@@ -296,6 +296,9 @@ pub struct IconImage {
     pub point_w: u32,
     pub scale: u32,
     pub path: PathBuf,
+    /// Pixel size to resample `path` to: set for the home-screen sizes
+    /// actool derives from a single-size icon.
+    pub resample_px: Option<u32>,
 }
 
 impl AssetCatalog {
@@ -800,7 +803,8 @@ impl AssetCatalog {
             .unwrap_or_default();
 
         let appicon_start = renditions.len();
-        let mut icon_renditions: Vec<(u32, u16, u16)> = Vec::new(); // (point_w, idiom, subtype)
+        // (point_w, idiom, subtype, size index)
+        let mut icon_renditions: Vec<(u32, u16, u16, u16)> = Vec::new();
         for img_info in &images {
             let Some(filename) = img_info.get("filename").and_then(|v| v.as_str()) else {
                 continue;
@@ -813,7 +817,7 @@ impl AssetCatalog {
                 .get("platform")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if !img_platform.is_empty() && img_platform != self.platform {
+            if !image_platform_applies(img_platform, &self.platform) {
                 continue;
             }
 
@@ -829,6 +833,16 @@ impl AssetCatalog {
             } else {
                 0
             };
+            // Xcode 14's single-size form: one universal 1024 image that
+            // actool files under both the phone and the pad idiom at icon
+            // index 1, and resamples into the loose home-screen PNGs.
+            let single_size = is_single_size_ios_icon(img_info, &self.platform);
+            if single_size && img_info.get("appearances").is_some() {
+                anyhow::bail!(
+                    "{}: dark and tinted app icon variants are not supported",
+                    item.display()
+                );
+            }
             let icon_rend_start = renditions.len();
 
             let lower_filename = filename.to_ascii_lowercase();
@@ -899,7 +913,7 @@ impl AssetCatalog {
                             platform: self.platform.clone(),
                             ..Rendition::default()
                         });
-                        icon_renditions.push((point_w, idiom_num, 0));
+                        icon_renditions.push((point_w, idiom_num, 0, dim2));
                     }
                 }
                 stamp_idiom(renditions, icon_rend_start, idiom_num);
@@ -908,27 +922,34 @@ impl AssetCatalog {
 
             let (pixel_data, width, height, pixel_format) =
                 load_image_as_bgra(&img_path, self.force_bgra)?;
-            let dim2 = self.icon_size_index(point_w);
-            renditions.push(Rendition {
-                name: filename.to_string(),
-                identifier: ident,
-                element: car::ELEMENT_UNIVERSAL,
-                part: car::PART_ICON,
-                scale: scale as u16,
-                width,
-                height,
-                pixel_data,
-                pixel_format,
-                layout: car::LAYOUT_ONE_PART_SCALE,
-                dim2,
-                template_rendering_intent: 0,
-                colorspace_id: car::colorspace_for_pixel_format(&pixel_format),
-                min_deploy: self.min_deploy.clone(),
-                platform: self.platform.clone(),
-                ..Rendition::default()
-            });
-            stamp_idiom(renditions, icon_rend_start, idiom_num);
-            icon_renditions.push((point_w, idiom_num, 0));
+            let (dim2, idioms) = if single_size {
+                (1, vec![car::idiom_value("iphone"), car::idiom_value("ipad")])
+            } else {
+                (self.icon_size_index(point_w), vec![idiom_num])
+            };
+            for idiom in idioms {
+                renditions.push(Rendition {
+                    name: filename.to_string(),
+                    identifier: ident,
+                    element: car::ELEMENT_UNIVERSAL,
+                    part: car::PART_ICON,
+                    scale: scale as u16,
+                    width,
+                    height,
+                    pixel_data: pixel_data.clone(),
+                    pixel_format,
+                    layout: car::LAYOUT_ONE_PART_SCALE,
+                    dim2,
+                    template_rendering_intent: 0,
+                    colorspace_id: car::colorspace_for_pixel_format(&pixel_format),
+                    min_deploy: self.min_deploy.clone(),
+                    platform: self.platform.clone(),
+                    ..Rendition::default()
+                });
+                let pushed = renditions.len() - 1;
+                stamp_idiom(renditions, pushed, idiom);
+                icon_renditions.push((point_w, idiom, 0, dim2));
+            }
         }
 
         if icon_renditions.is_empty() {
@@ -952,9 +973,10 @@ impl AssetCatalog {
             if let Some(mut synth) = src {
                 synth.scale = 2;
                 synth.subtype = 1792;
-                synth.dim2 = self.icon_size_index(90);
+                let synth_dim2 = self.icon_size_index(90);
+                synth.dim2 = synth_dim2;
                 renditions.push(synth);
-                icon_renditions.push((90, car::idiom_value("iphone"), 1792));
+                icon_renditions.push((90, car::idiom_value("iphone"), 1792, synth_dim2));
             }
         }
 
@@ -963,11 +985,11 @@ impl AssetCatalog {
         // subtype (attr 16), so phone, pad, marketing and the Plus-phone
         // subtype-1792 facet are distinct; macOS uses idiom 0 / subtype 0
         // throughout, collapsing to the single combined facet as before.
-        let mut sizes_by_group: IndexMap<(u16, u16), Vec<u32>> = IndexMap::new();
-        for (point_w, idiom, subtype) in &icon_renditions {
+        let mut sizes_by_group: IndexMap<(u16, u16), Vec<(u32, u16)>> = IndexMap::new();
+        for (point_w, idiom, subtype, index) in &icon_renditions {
             let sizes = sizes_by_group.entry((*idiom, *subtype)).or_default();
-            if !sizes.contains(point_w) {
-                sizes.push(*point_w);
+            if !sizes.iter().any(|(w, _)| w == point_w) {
+                sizes.push((*point_w, *index));
             }
         }
         let mut groups: Vec<(u16, u16)> = sizes_by_group.keys().copied().collect();
@@ -979,10 +1001,10 @@ impl AssetCatalog {
             sizes.sort_unstable();
             let ms_entries: Vec<MultisizeImageEntry> = sizes
                 .iter()
-                .map(|w| MultisizeImageEntry {
+                .map(|(w, index)| MultisizeImageEntry {
                     width: *w,
                     height: *w,
-                    index: self.icon_size_index(*w) as u32,
+                    index: *index as u32,
                 })
                 .collect();
             let mut ms_rend = car::build_multisize_rendition(&name, ident, &ms_entries);
@@ -1431,6 +1453,26 @@ impl AssetCatalog {
                 if !path.exists() {
                     continue;
                 }
+                if !image_platform_applies(
+                    img_info.get("platform").and_then(|v| v.as_str()).unwrap_or(""),
+                    &self.platform,
+                ) {
+                    continue;
+                }
+                if is_single_size_ios_icon(img_info, &self.platform) {
+                    // actool resamples the 1024 source into the iPhone 60pt@2x
+                    // and iPad 76pt@2x home-screen icons.
+                    for (idiom, point_w) in [("iphone", 60u32), ("ipad", 76)] {
+                        result.push(IconImage {
+                            idiom: idiom.to_string(),
+                            point_w,
+                            scale: 2,
+                            path: path.clone(),
+                            resample_px: Some(point_w * 2),
+                        });
+                    }
+                    continue;
+                }
                 let idiom = img_info
                     .get("idiom")
                     .and_then(|v| v.as_str())
@@ -1446,6 +1488,7 @@ impl AssetCatalog {
                     point_w,
                     scale: parse_scale(img_info),
                     path,
+                    resample_px: None,
                 });
             }
         }
@@ -1497,6 +1540,28 @@ impl AssetCatalog {
 /// Stamp the device idiom onto every rendition appended since `start`. Used to
 /// tag all of an image entry's renditions (a PDF/SVG entry expands into several)
 /// without repeating `idiom` in each Rendition literal.
+/// Whether an icon image's `platform` field (Xcode's family name, `ios`)
+/// applies to the SDK being compiled for (`iphoneos`, `iphonesimulator`).
+/// Only `ios` is mapped: it is the one family name whose actool output is
+/// recorded (tests/ref_samples/ios_single_output); others compare exactly.
+fn image_platform_applies(image_platform: &str, sdk: &str) -> bool {
+    match image_platform {
+        "" => true,
+        "ios" => car::is_idiom_platform(sdk),
+        other => other == sdk,
+    }
+}
+
+/// Xcode 14's single-size iOS app icon: one `universal` image declared for
+/// the `ios` platform at 1024x1024.
+fn is_single_size_ios_icon(img_info: &Value, sdk: &str) -> bool {
+    let field = |key: &str| img_info.get(key).and_then(|v| v.as_str()).unwrap_or("");
+    car::is_idiom_platform(sdk)
+        && field("platform") == "ios"
+        && field("idiom") == "universal"
+        && field("size") == "1024x1024"
+}
+
 fn stamp_idiom(renditions: &mut [Rendition], start: usize, idiom: u16) {
     if idiom == 0 {
         return;

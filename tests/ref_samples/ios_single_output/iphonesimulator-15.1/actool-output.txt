@@ -1,0 +1,6 @@
+/* com.apple.actool.compilation-results */
+tests/ref_samples/ios_single_output/iphonesimulator-15.1/compiled/AppIcon60x60@2x.png
+tests/ref_samples/ios_single_output/iphonesimulator-15.1/compiled/AppIcon76x76@2x~ipad.png
+tests/ref_samples/ios_single_output/iphonesimulator-15.1/compiled/Assets.car
+tests/ref_samples/ios_single_output/iphonesimulator-15.1/partial.plist
+
