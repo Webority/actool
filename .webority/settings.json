@@ -1,4 +1,32 @@
 {
+  "$schema": "~/.claude/schemas/settings.schema.json",
+  "schemaVersion": 1,
   "engineeringProjectId": 156,
-  "projectName": "xOS Tools"
+  "owner": {
+    "type": "webority",
+    "pushOrgs": [
+      "Webority"
+    ]
+  },
+  "kind": "tool",
+  "stacks": [
+    "rust"
+  ],
+  "release": {
+    "mode": "manual",
+    "speed": "normal"
+  },
+  "staging": {
+    "deploy": "on-word"
+  },
+  "commands": {
+    "verify": "cargo check -q"
+  },
+  "git": {
+    "prPolicy": "release-only",
+    "branches": {
+      "working": "development",
+      "release": "main"
+    }
+  }
 }
