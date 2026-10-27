@@ -13,7 +13,9 @@
 //! still emitted so the catalog stays self-consistent.
 
 use anyhow::{anyhow, Result};
-use std::os::raw::{c_char, c_double, c_void};
+#[cfg(target_os = "macos")]
+use std::os::raw::c_char;
+use std::os::raw::{c_double, c_void};
 use std::sync::OnceLock;
 
 #[cfg(target_os = "macos")]

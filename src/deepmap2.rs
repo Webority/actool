@@ -7,6 +7,7 @@
 use std::ffi::c_void;
 use std::os::raw::{c_ulong, c_ushort};
 use std::ptr;
+#[cfg(target_os = "macos")]
 use std::sync::OnceLock;
 
 pub const PIXFMT_BGRA: &[u8; 4] = b"BGRA";

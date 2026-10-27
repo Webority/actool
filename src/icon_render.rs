@@ -13,8 +13,9 @@
 //! glass/specular/shadow treatments Apple applies on top are only partly
 //! reproduced (no public algorithm); the gradient-squircle background is.
 
-use std::os::raw::{c_char, c_double, c_void};
-use std::sync::OnceLock;
+use std::os::raw::{c_double, c_void};
+#[cfg(target_os = "macos")]
+use std::{os::raw::c_char, sync::OnceLock};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
