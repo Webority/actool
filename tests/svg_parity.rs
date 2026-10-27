@@ -25,7 +25,11 @@ fn matches_python_reference() {
     let reference = std::fs::read(reference_path).expect("read reference");
     assert_eq!(ours.len(), reference.len());
     // Count differing pixels to avoid printing a gigantic diff
-    let diffs = ours.iter().zip(reference.iter()).filter(|(a, b)| a != b).count();
+    let diffs = ours
+        .iter()
+        .zip(reference.iter())
+        .filter(|(a, b)| a != b)
+        .count();
     if diffs > 0 {
         let _ = std::fs::write("tmp/svg_rust_output.bin", &ours);
         panic!("SVG raster mismatch: {diffs} differing bytes");

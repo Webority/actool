@@ -56,15 +56,8 @@ type CGPDFDocGetPage = unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void;
 type CGPDFPageGetBoxRect = unsafe extern "C" fn(*mut c_void, u32) -> CGRect;
 type CGColorSpaceCreateFn = unsafe extern "C" fn(*mut c_void) -> *mut c_void;
 type CGColorSpaceRelease = unsafe extern "C" fn(*mut c_void);
-type CGBitmapCreateFn = unsafe extern "C" fn(
-    *mut c_void,
-    usize,
-    usize,
-    usize,
-    usize,
-    *mut c_void,
-    u32,
-) -> *mut c_void;
+type CGBitmapCreateFn =
+    unsafe extern "C" fn(*mut c_void, usize, usize, usize, usize, *mut c_void, u32) -> *mut c_void;
 type CGBitmapGetDataFn = unsafe extern "C" fn(*mut c_void) -> *mut u8;
 type CGContextScaleFn = unsafe extern "C" fn(*mut c_void, c_double, c_double);
 type CGContextDrawPDFFn = unsafe extern "C" fn(*mut c_void, *mut c_void);
@@ -158,7 +151,11 @@ fn load_syms() -> Option<&'static PdfSyms> {
             ctx_draw_pdf: sym!(cg, c"CGContextDrawPDFPage", CGContextDrawPDFFn),
             ctx_release: sym!(cg, c"CGContextRelease", CGContextReleaseFn),
             cf_data_create_mutable: sym!(cf, c"CFDataCreateMutable", CFDataCreateMutableFn),
-            data_consumer_create: sym!(cg, c"CGDataConsumerCreateWithCFData", CGDataConsumerCreateFn),
+            data_consumer_create: sym!(
+                cg,
+                c"CGDataConsumerCreateWithCFData",
+                CGDataConsumerCreateFn
+            ),
             data_consumer_release: sym!(cg, c"CGDataConsumerRelease", CGDPRelease),
             pdf_ctx_create: sym!(cg, c"CGPDFContextCreate", CGPDFContextCreateFn),
             pdf_begin_page: sym!(cg, c"CGPDFContextBeginPage", CGPDFContextPageFn),
@@ -251,8 +248,7 @@ pub fn rasterize_pdf(pdf_data: &[u8], scale: u32) -> Result<RasterizedPdf> {
         }
         const K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST: u32 = 2;
         const K_CG_BITMAP_BYTE_ORDER_32_LITTLE: u32 = 2 << 12;
-        let bitmap_info = K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST
-            | K_CG_BITMAP_BYTE_ORDER_32_LITTLE;
+        let bitmap_info = K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST | K_CG_BITMAP_BYTE_ORDER_32_LITTLE;
         let bpr = (px_w as usize) * 4;
         let ctx = (syms.bitmap_create)(
             std::ptr::null_mut(),

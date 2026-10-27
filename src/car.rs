@@ -158,7 +158,7 @@ pub fn min_pack_version(platform: &str) -> (u32, u32) {
 
 pub fn aligned_bytes_per_row(width: u32, _pixel_format: &[u8]) -> u32 {
     let exact = width * 4;
-    ((exact + 31) / 32) * 32
+    exact.div_ceil(32) * 32
 }
 
 pub fn compute_keyformat<R>(renditions: &[R], force_dim1: bool) -> Vec<u16>
@@ -359,8 +359,7 @@ fn compress_rle(pixel_data: &[u8], width: u32, height: u32, bpp: u32) -> Vec<u8>
     let mut row_offsets = Vec::with_capacity(height);
     let mut encoded = Vec::new();
     let data_base = 12 + height * 4;
-    let mut row_cache: std::collections::HashMap<Vec<u8>, u32> =
-        std::collections::HashMap::new();
+    let mut row_cache: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
 
     for y in 0..height {
         let row_start = y * row_stride;
@@ -377,9 +376,7 @@ fn compress_rle(pixel_data: &[u8], width: u32, height: u32, bpp: u32) -> Vec<u8>
         while x < width {
             let px = &row[x * bpp..(x + 1) * bpp];
             let mut run_len = 1usize;
-            while x + run_len < width
-                && &row[(x + run_len) * bpp..(x + run_len + 1) * bpp] == px
-            {
+            while x + run_len < width && &row[(x + run_len) * bpp..(x + run_len + 1) * bpp] == px {
                 run_len += 1;
             }
             if run_len >= 2 {
@@ -391,9 +388,7 @@ fn compress_rle(pixel_data: &[u8], width: u32, height: u32, bpp: u32) -> Vec<u8>
                 let lit_start = x;
                 while x < width {
                     let next_px = &row[x * bpp..(x + 1) * bpp];
-                    if x + 1 < width
-                        && &row[(x + 1) * bpp..(x + 2) * bpp] == next_px
-                    {
+                    if x + 1 < width && &row[(x + 1) * bpp..(x + 2) * bpp] == next_px {
                         break;
                     }
                     x += 1;
@@ -481,16 +476,9 @@ pub fn compress_data(
     if allow_dmp2 {
         let dmp2_min = min_dmp2_version(platform);
         if deploy_ver >= dmp2_min && pixel_data.len() > 256 {
-            if let Some(dmp2_data) =
-                deepmap2::encode(pixel_data, pixel_format, width, height)
-            {
+            if let Some(dmp2_data) = deepmap2::encode(pixel_data, pixel_format, width, height) {
                 let celm_ver = if is_opaque { 2 } else { 0 };
-                return deepmap2::make_celm_dmp2(
-                    &dmp2_data,
-                    pixel_format,
-                    dmp2_inline,
-                    celm_ver,
-                );
+                return deepmap2::make_celm_dmp2(&dmp2_data, pixel_format, dmp2_inline, celm_ver);
             }
         }
     }
@@ -860,12 +848,12 @@ pub fn build_iconstack_csi(name: &str, dim: u32, layers: &[LayerRef]) -> Vec<u8>
     let mut t3f4 = Vec::new();
     t3f4.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for layer in layers {
-        t3f4.extend(std::iter::repeat(0u8).take(28));
+        t3f4.extend(std::iter::repeat_n(0u8, 28));
         t3f4.extend_from_slice(&f32::to_le_bytes(1.0));
         t3f4.extend_from_slice(&u32::to_le_bytes(16));
         write_layer_key_fragment(&mut t3f4, layer);
     }
-    t3f4.extend(std::iter::repeat(0u8).take(4));
+    t3f4.extend(std::iter::repeat_n(0u8, 4));
 
     let mut t3fc = Vec::new();
     t3fc.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
@@ -883,11 +871,15 @@ pub fn build_iconstack_csi(name: &str, dim: u32, layers: &[LayerRef]) -> Vec<u8>
     let mut t3fd = Vec::new();
     t3fd.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for layer in layers {
-        t3fd.extend(std::iter::repeat(0u8).take(16));
-        let v = if layer.part == PART_ICON_GROUP { 0.5 } else { 0.0 };
+        t3fd.extend(std::iter::repeat_n(0u8, 16));
+        let v = if layer.part == PART_ICON_GROUP {
+            0.5
+        } else {
+            0.0
+        };
         t3fd.extend_from_slice(&f32::to_le_bytes(v));
     }
-    t3fd.extend(std::iter::repeat(0u8).take(4));
+    t3fd.extend(std::iter::repeat_n(0u8, 4));
 
     let mut tlv = Vec::new();
     tlv.extend(tlv_header(0x03F4, t3f4.len() as u32));
@@ -925,7 +917,7 @@ pub fn build_icongroup_csi(name: &str, child_dim: u32, layers: &[LayerRef]) -> V
     let mut t3f4 = Vec::new();
     t3f4.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for layer in layers {
-        t3f4.extend(std::iter::repeat(0u8).take(16));
+        t3f4.extend(std::iter::repeat_n(0u8, 16));
         t3f4.extend_from_slice(&u32::to_le_bytes(child_dim));
         t3f4.extend_from_slice(&u32::to_le_bytes(child_dim));
         t3f4.extend_from_slice(&u32::to_le_bytes(0));
@@ -933,7 +925,7 @@ pub fn build_icongroup_csi(name: &str, child_dim: u32, layers: &[LayerRef]) -> V
         t3f4.extend_from_slice(&u32::to_le_bytes(16));
         write_layer_key_fragment(&mut t3f4, layer);
     }
-    t3f4.extend(std::iter::repeat(0u8).take(4));
+    t3f4.extend(std::iter::repeat_n(0u8, 4));
 
     let mut t3fc = Vec::new();
     t3fc.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
@@ -950,9 +942,9 @@ pub fn build_icongroup_csi(name: &str, child_dim: u32, layers: &[LayerRef]) -> V
     let mut t3fd = Vec::new();
     t3fd.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for _ in layers {
-        t3fd.extend(std::iter::repeat(0u8).take(20));
+        t3fd.extend(std::iter::repeat_n(0u8, 20));
     }
-    t3fd.extend(std::iter::repeat(0u8).take(4));
+    t3fd.extend(std::iter::repeat_n(0u8, 4));
 
     let mut tlv = Vec::new();
     tlv.extend(tlv_header(0x03F4, t3f4.len() as u32));
@@ -998,7 +990,7 @@ fn make_layered_uti_tlv() -> Vec<u8> {
 fn make_dwar_trailer() -> Vec<u8> {
     let mut t = Vec::new();
     t.extend_from_slice(b"DWAR");
-    t.extend(std::iter::repeat(0u8).take(8));
+    t.extend(std::iter::repeat_n(0u8, 8));
     t
 }
 
@@ -1228,10 +1220,8 @@ pub fn jpeg_dimensions(data: &[u8]) -> (u32, u32) {
         }
         let seg_len = u16::from_be_bytes([data[i], data[i + 1]]) as usize;
         // SOF markers: 0xC0-0xCF except DHT (0xC4), JPG (0xC8), DAC (0xCC)
-        let is_sof = (0xC0..=0xCF).contains(&marker)
-            && marker != 0xC4
-            && marker != 0xC8
-            && marker != 0xCC;
+        let is_sof =
+            (0xC0..=0xCF).contains(&marker) && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
         if is_sof {
             if i + 7 > data.len() {
                 return (0, 0);
@@ -1492,30 +1482,33 @@ impl Rendition {
             let mut pixel_data = self.pixel_data.clone();
             if use_aligned {
                 let dmp2_min = min_dmp2_version(&self.platform);
-                let will_try_dmp2 =
-                    use_dmp2 && deploy_ver >= dmp2_min && pixel_data.len() > 256;
+                let will_try_dmp2 = use_dmp2 && deploy_ver >= dmp2_min && pixel_data.len() > 256;
                 let actual_bpp: u32 = if &self.pixel_format == b"BGRA" { 4 } else { 2 };
                 let padded_bpr = if will_try_dmp2 {
                     aligned_bytes_per_row(self.width, &self.pixel_format)
                 } else {
-                    ((self.width * actual_bpp + 31) / 32) * 32
+                    (self.width * actual_bpp).div_ceil(32) * 32
                 };
                 let exact_bpr = self.width * actual_bpp;
                 if padded_bpr != exact_bpr && self.height > 0 {
-                    let mut padded =
-                        Vec::with_capacity((padded_bpr * self.height) as usize);
+                    let mut padded = Vec::with_capacity((padded_bpr * self.height) as usize);
                     let pad = padded_bpr - exact_bpr;
                     for row in 0..self.height as usize {
                         let s = row * exact_bpr as usize;
                         padded.extend_from_slice(&pixel_data[s..s + exact_bpr as usize]);
-                        padded.extend(std::iter::repeat(0u8).take(pad as usize));
+                        padded.extend(std::iter::repeat_n(0u8, pad as usize));
                     }
                     pixel_data = padded;
                 }
             }
 
             let opaque = !self.force_non_opaque
-                && check_opaque(&self.pixel_data, &self.pixel_format, self.width, self.height);
+                && check_opaque(
+                    &self.pixel_data,
+                    &self.pixel_format,
+                    self.width,
+                    self.height,
+                );
             rend_data = compress_data(
                 &pixel_data,
                 &self.pixel_format,
@@ -1536,7 +1529,7 @@ impl Rendition {
                 aligned_bytes_per_row(self.width, &self.pixel_format)
             } else if use_aligned {
                 let actual_bpp: u32 = if &self.pixel_format == b"BGRA" { 4 } else { 2 };
-                ((self.width * actual_bpp + 31) / 32) * 32
+                (self.width * actual_bpp).div_ceil(32) * 32
             } else {
                 self.width * 4
             };
@@ -1715,15 +1708,7 @@ mod tests {
     #[test]
     fn compress_data_uncompressed_small() {
         let out = compress_data(
-            &vec![0u8; 16],
-            b"BGRA",
-            2,
-            2,
-            "10.11",
-            "macosx",
-            false,
-            false,
-            false,
+            &[0u8; 16], b"BGRA", 2, 2, "10.11", "macosx", false, false, false,
         );
         // 16 bytes of zeros shouldn't compress smaller than themselves
         assert_eq!(&out[..4], b"MLEC");

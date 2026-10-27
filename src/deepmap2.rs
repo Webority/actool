@@ -27,20 +27,13 @@ struct VImageBuffer {
     row_bytes: c_ulong,
 }
 
-type EncodeFn = unsafe extern "C" fn(
-    *mut VImageBuffer,
-    u32,
-    *mut Deepmap2Options,
-    *mut *mut c_void,
-) -> usize;
+type EncodeFn =
+    unsafe extern "C" fn(*mut VImageBuffer, u32, *mut Deepmap2Options, *mut *mut c_void) -> usize;
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn dlopen(filename: *const std::os::raw::c_char, flags: i32) -> *mut c_void;
-    fn dlsym(
-        handle: *mut c_void,
-        symbol: *const std::os::raw::c_char,
-    ) -> *mut c_void;
+    fn dlsym(handle: *mut c_void, symbol: *const std::os::raw::c_char) -> *mut c_void;
     fn free(ptr: *mut c_void);
 }
 
@@ -84,12 +77,7 @@ pub fn is_available() -> bool {
     encode_fn().is_some()
 }
 
-pub fn encode(
-    pixel_data: &[u8],
-    pixel_format: &[u8],
-    width: u32,
-    height: u32,
-) -> Option<Vec<u8>> {
+pub fn encode(pixel_data: &[u8], pixel_format: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
     let fn_ptr = encode_fn()?;
     let dm_fmt = pixfmt_to_dm(pixel_format)?;
 
@@ -113,17 +101,13 @@ pub fn encode(
     };
     let mut out_ptr: *mut c_void = ptr::null_mut();
 
-    let encoded_size = unsafe {
-        fn_ptr(&mut vbuf, dm_fmt, &mut opts, &mut out_ptr)
-    };
+    let encoded_size = unsafe { fn_ptr(&mut vbuf, dm_fmt, &mut opts, &mut out_ptr) };
 
     if encoded_size == 0 || out_ptr.is_null() {
         return None;
     }
 
-    let result = unsafe {
-        std::slice::from_raw_parts(out_ptr as *const u8, encoded_size).to_vec()
-    };
+    let result = unsafe { std::slice::from_raw_parts(out_ptr as *const u8, encoded_size).to_vec() };
     #[cfg(target_os = "macos")]
     unsafe {
         free(out_ptr);
@@ -179,7 +163,7 @@ mod tests {
 
     #[test]
     fn celm_header_fields() {
-        let fake_dmp2 = [b'd', b'm', b'p', b'2']
+        let fake_dmp2 = b"dmp2"
             .iter()
             .chain([0u8; 20].iter())
             .copied()
@@ -235,7 +219,7 @@ mod tests {
 
     #[test]
     fn encode_unknown_pixfmt() {
-        let r = encode(&vec![0u8; 64], b"XYZW", 4, 4);
+        let r = encode(&[0u8; 64], b"XYZW", 4, 4);
         assert!(r.is_none());
     }
 

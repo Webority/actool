@@ -70,8 +70,7 @@ fn pre_rendered_name(
     let scale_label = format!("{scale}x");
     let pt_label = format!("{point_size}");
     let uuid = deterministic_uuid(&[icon_name, &pt_label, &scale_label, appearance_name]);
-    let tail_uuid =
-        deterministic_uuid(&[icon_name, &pt_label, &scale_label, "tail"]);
+    let tail_uuid = deterministic_uuid(&[icon_name, &pt_label, &scale_label, "tail"]);
     let tail_hex: String = tail_uuid.chars().filter(|c| *c != '-').collect();
     let pid = &tail_hex[0..5];
     let hex = &tail_hex[5..21];
@@ -79,9 +78,7 @@ fn pre_rendered_name(
     // `--app-icon` name), not a literal "icon": feishin.icon → "feishin16x16…".
     // element-web's stem happens to be "icon", which is why the old literal
     // matched it.
-    format!(
-        "{icon_name}{point_size}x{point_size}_{appearance_name}_{uuid}-{pid}-{hex}.png"
-    )
+    format!("{icon_name}{point_size}x{point_size}_{appearance_name}_{uuid}-{pid}-{hex}.png")
 }
 
 /// Sizes Apple's actool emits for `.icon` bundles: one rendition per point
@@ -140,12 +137,13 @@ pub fn compile_icon_bundle(
         .to_string();
     // --app-icon controls the .icns filename and Info.plist value, but
     // Apple's actool always names the in-CAR facet after the bundle stem.
-    let icon_name = app_icon.map(|s| s.to_string()).unwrap_or(bundle_stem.clone());
+    let icon_name = app_icon
+        .map(|s| s.to_string())
+        .unwrap_or(bundle_stem.clone());
 
     let icon_json_path = icon_path.join("icon.json");
-    let icon_json_text = fs::read_to_string(&icon_json_path).map_err(|e| {
-        anyhow::anyhow!("could not read {}: {e}", icon_json_path.display())
-    })?;
+    let icon_json_text = fs::read_to_string(&icon_json_path)
+        .map_err(|e| anyhow::anyhow!("could not read {}: {e}", icon_json_path.display()))?;
     let icon_json_value: serde_json::Value = serde_json::from_str(&icon_json_text)?;
     let parsed: IconJson = IconJson::parse(&icon_json_text)?;
 
@@ -193,9 +191,8 @@ pub fn compile_icon_bundle(
             })
             .collect()
     };
-    let (color_assets, gradient_assets) =
-        fill_assets(&facet_prefix, parsed.fill.as_ref(), &parsed)
-            .unwrap_or_else(|| (Vec::new(), Vec::new()));
+    let (color_assets, gradient_assets) = fill_assets(&facet_prefix, parsed.fill.as_ref(), &parsed)
+        .unwrap_or_else(|| (Vec::new(), Vec::new()));
 
     let mut output_files: Vec<PathBuf> = Vec::new();
 
@@ -208,11 +205,8 @@ pub fn compile_icon_bundle(
     // concurrent compiles in the same process (e.g. parallel integration
     // tests) don't share the same path and tear each other down.
     let tmp_seq = TMP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let tmpdir = std::env::temp_dir().join(format!(
-        "actool_icon_{}_{}",
-        std::process::id(),
-        tmp_seq
-    ));
+    let tmpdir =
+        std::env::temp_dir().join(format!("actool_icon_{}_{}", std::process::id(), tmp_seq));
     fs::create_dir_all(&tmpdir)?;
     let primary_source = &source_images[0];
     let primary_is_svg = is_svg_path(primary_source);
@@ -233,7 +227,7 @@ pub fn compile_icon_bundle(
             let bgra =
                 crate::svg_raster::rasterize_svg(&svg_data, *point_size, *point_size, *scale)?;
             let mut rgba = bgra.clone();
-            for px in rgba.chunks_exact_mut(4) {
+            for px in rgba.as_chunks_mut::<4>().0 {
                 px.swap(0, 2);
             }
             let img = image::RgbaImage::from_raw(pixel_size, pixel_size, rgba)
@@ -247,12 +241,8 @@ pub fn compile_icon_bundle(
         let src_img = image::open(primary_source)?.to_rgba8();
         for (point_size, scale) in MACOS_ICON_SIZES {
             let pixel_size = point_size * scale;
-            let resized = image::imageops::resize(
-                &src_img,
-                pixel_size,
-                pixel_size,
-                FilterType::Lanczos3,
-            );
+            let resized =
+                image::imageops::resize(&src_img, pixel_size, pixel_size, FilterType::Lanczos3);
             let filename = format!("Icon{pixel_size}x{pixel_size}.png");
             let filepath = tmpdir.join(&filename);
             resized.save(&filepath)?;
@@ -273,8 +263,7 @@ pub fn compile_icon_bundle(
     // and Rectangle's 2 → attr 24 absent in Apple's output) — their per-group
     // stacks are recomposed live instead. A `tinted` appearance never triggers
     // it (tint mode is a live system recolour, never a stored variant).
-    let emit_variant_axis =
-        parsed.groups.len() == 1 && json_has_dark_appearance(&icon_json_value);
+    let emit_variant_axis = parsed.groups.len() == 1 && json_has_dark_appearance(&icon_json_value);
 
     // Pre-render the full layer stack (all layers, positioned, with glass
     // shading / blend modes / opacity) at each icon size, aligned with
@@ -353,11 +342,7 @@ pub fn compile_icon_bundle(
 /// references an image. Source paths are resolved against `<bundle>/Assets/`
 /// first, then the bundle root. Layers without a resolvable image are
 /// skipped silently — they don't correspond to a source asset.
-fn collect_layer_assets(
-    bundle: &Path,
-    json: &IconJson,
-    facet_prefix: &str,
-) -> Vec<LayerAsset> {
+fn collect_layer_assets(bundle: &Path, json: &IconJson, facet_prefix: &str) -> Vec<LayerAsset> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for (_group, layer) in json.iter_layers() {
@@ -418,9 +403,7 @@ fn validate_layer_image_refs(bundle: &Path, json: &serde_json::Value) -> Result<
             let image_name = match layer.get("image-name").and_then(|v| v.as_str()) {
                 Some(n) => n,
                 None => {
-                    anyhow::bail!(
-                        "the layer \"{layer_name}\" does not have an image name"
-                    );
+                    anyhow::bail!("the layer \"{layer_name}\" does not have an image name");
                 }
             };
             let in_assets = bundle.join("Assets").join(image_name);
@@ -492,8 +475,7 @@ fn blur_rgba_premul(buf: &mut [u8], w: usize, sigma: f32) {
     }
     let n = w * w;
     // Straight RGBA → premultiplied f32 channels.
-    let mut ch: [Vec<f32>; 4] =
-        [vec![0.0; n], vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+    let mut ch: [Vec<f32>; 4] = [vec![0.0; n], vec![0.0; n], vec![0.0; n], vec![0.0; n]];
     for i in 0..n {
         let a = buf[i * 4 + 3] as f32 / 255.0;
         for c in 0..3 {
@@ -512,7 +494,11 @@ fn blur_rgba_premul(buf: &mut [u8], w: usize, sigma: f32) {
     for i in 0..n {
         let a = ch[3][i].clamp(0.0, 1.0);
         for c in 0..3 {
-            let v = if a > 0.0004 { (ch[c][i] / a).clamp(0.0, 1.0) } else { 0.0 };
+            let v = if a > 0.0004 {
+                (ch[c][i] / a).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
             buf[i * 4 + c] = (v * 255.0).round() as u8;
         }
         buf[i * 4 + 3] = (a * 255.0).round() as u8;
@@ -533,7 +519,7 @@ fn box_blur_h(src: &mut [f32], tmp: &mut [f32], w: usize, r: usize) {
         for x in 0..w {
             tmp[row + x] = sum / win;
             let add = (x + r + 1).min(w - 1);
-            let sub = if x >= r { x - r } else { 0 };
+            let sub = x.saturating_sub(r);
             sum += src[row + add] - src[row + sub];
         }
     }
@@ -552,7 +538,7 @@ fn box_blur_v(src: &mut [f32], tmp: &mut [f32], w: usize, r: usize) {
         for y in 0..w {
             tmp[y * w + x] = sum / win;
             let add = (y + r + 1).min(w - 1);
-            let sub = if y >= r { y - r } else { 0 };
+            let sub = y.saturating_sub(r);
             sum += src[add * w + x] - src[sub * w + x];
         }
     }
@@ -621,15 +607,20 @@ fn collect_stack_layers(
             if layer.hidden == Some(true) {
                 continue;
             }
-            let Some(name) = layer.image_name.as_deref() else { continue };
+            let Some(name) = layer.image_name.as_deref() else {
+                continue;
+            };
             let assets = bundle.join("Assets").join(name);
-            let path = if assets.exists() { assets } else { bundle.join(name) };
+            let path = if assets.exists() {
+                assets
+            } else {
+                bundle.join(name)
+            };
             if !path.exists() {
                 continue;
             }
             let explicit = eff.layers.get(i).map(|l| l.glass).unwrap_or(false);
-            let opted_out =
-                layer.glass == Some(false) && layer.glass_specializations.is_none();
+            let opted_out = layer.glass == Some(false) && layer.glass_specializations.is_none();
             let (lscale, ltx, lty) = layer
                 .position
                 .as_ref()
@@ -648,8 +639,7 @@ fn collect_stack_layers(
             // group's specular is on (KYA's cup).
             let is_glass = explicit || (glass_context && !opted_out);
             let frosted = is_glass && eff.translucency.enabled;
-            let tinted = frosted
-                && eff.shadow.kind == crate::icon_effects::ShadowKind::LayerColor;
+            let tinted = frosted && eff.shadow.kind == crate::icon_effects::ShadowKind::LayerColor;
             let specular = is_glass && !eff.translucency.enabled && eff.specular;
             // A glass layer casts a per-layer drop shadow on the background when
             // its group requests one; the peak scales with the shadow opacity.
@@ -699,9 +689,15 @@ fn rasterize_layer(path: &Path, w: u32, h: u32) -> Result<Vec<u8>> {
         let svg = fs::read(path)?;
         let bgra = crate::svg_raster::rasterize_svg(&svg, w, h, 1)?;
         let mut rgba = vec![0u8; bgra.len()];
-        for (o, px) in bgra.chunks_exact(4).enumerate() {
+        for (o, px) in bgra.as_chunks::<4>().0.iter().enumerate() {
             let a = px[3];
-            let un = |c: u8| if a == 0 { 0 } else { ((c as u32 * 255 + a as u32 / 2) / a as u32).min(255) as u8 };
+            let un = |c: u8| {
+                if a == 0 {
+                    0
+                } else {
+                    ((c as u32 * 255 + a as u32 / 2) / a as u32).min(255) as u8
+                }
+            };
             rgba[o * 4] = un(px[2]);
             rgba[o * 4 + 1] = un(px[1]);
             rgba[o * 4 + 2] = un(px[0]);
@@ -907,8 +903,12 @@ fn render_layer_stack(
                         }
                     }
                 } else {
-                    let mut dst =
-                        [rgba[ci * 4], rgba[ci * 4 + 1], rgba[ci * 4 + 2], rgba[ci * 4 + 3]];
+                    let mut dst = [
+                        rgba[ci * 4],
+                        rgba[ci * 4 + 1],
+                        rgba[ci * 4 + 2],
+                        rgba[ci * 4 + 3],
+                    ];
                     // Opaque glass lifts the layer's blacks toward a grey floor
                     // (≈45/255 on KYA's cup) — screen each channel with it.
                     let s = if layer.specular {
@@ -980,7 +980,12 @@ fn render_layer_stack(
                 glass_buf[i * 4 + 2],
                 glass_buf[i * 4 + 3],
             ];
-            let mut dst = [rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]];
+            let mut dst = [
+                rgba[i * 4],
+                rgba[i * 4 + 1],
+                rgba[i * 4 + 2],
+                rgba[i * 4 + 3],
+            ];
             composite_blend(&mut dst, &g, BlendMode::Normal);
             rgba[i * 4..i * 4 + 4].copy_from_slice(&dst);
         }
@@ -991,8 +996,7 @@ fn render_layer_stack(
     if any_shadow {
         if let Some(g) = gradient {
             let off = (SHADOW_OFFSET_Y * f).round() as usize;
-            let mut chans: [Vec<f32>; 3] =
-                [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+            let mut chans: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
             for y in 0..w {
                 let sy = y.saturating_sub(off); // shift darkening downward
                 for x in 0..w {
@@ -1036,7 +1040,12 @@ fn render_layer_stack(
     // Straight RGBA → premultiplied-first BGRA.
     let mut out = vec![0u8; n * 4];
     for i in 0..n {
-        let (r, g, b, a) = (rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]);
+        let (r, g, b, a) = (
+            rgba[i * 4],
+            rgba[i * 4 + 1],
+            rgba[i * 4 + 2],
+            rgba[i * 4 + 3],
+        );
         let pm = |c: u8| ((c as u32 * a as u32 + 127) / 255) as u8;
         out[i * 4] = pm(b);
         out[i * 4 + 1] = pm(g);
@@ -1053,8 +1062,7 @@ fn find_all_source_images(bundle: &Path, json: &serde_json::Value) -> Vec<PathBu
         for group in groups {
             if let Some(layers) = group.get("layers").and_then(|v| v.as_array()) {
                 for layer in layers {
-                    let Some(name) = layer.get("image-name").and_then(|v| v.as_str())
-                    else {
+                    let Some(name) = layer.get("image-name").and_then(|v| v.as_str()) else {
                         continue;
                     };
                     if !seen.insert(name.to_string()) {
@@ -1104,7 +1112,11 @@ fn build_icon_car(
     // Each variant (0 = primary, 1 = alternate) gets its own packed_imgs
     // list so the packer routes them into separate atlases (the alternate
     // atlas gets gamut=1 in its name and attribute 24 = 1 in its key).
-    let variants: &[u16] = if emit_variant_axis { &[0u16, 1] } else { &[0u16] };
+    let variants: &[u16] = if emit_variant_axis {
+        &[0u16, 1]
+    } else {
+        &[0u16]
+    };
     let mut packed_imgs_per_variant: Vec<Vec<crate::packer::PackedImage>> =
         variants.iter().map(|_| Vec::new()).collect();
 
@@ -1122,7 +1134,10 @@ fn build_icon_car(
     // reproduces Apple's halo (`shadow_geometry` tuned to it).
     use crate::icon_effects::{ShadowKind, ShadowSpec};
     let _ = groups;
-    let icon_shadow = Some(ShadowSpec { kind: ShadowKind::Neutral, opacity: 0.5 });
+    let icon_shadow = Some(ShadowSpec {
+        kind: ShadowKind::Neutral,
+        opacity: 0.5,
+    });
     let light_shadow = icon_shadow;
     let dark_shadow = icon_shadow;
 
@@ -1161,17 +1176,18 @@ fn build_icon_car(
                 light_fill
             };
             let shadow = shadow_params(
-                if variant == 1 { dark_shadow } else { light_shadow },
+                if variant == 1 {
+                    dark_shadow
+                } else {
+                    light_shadow
+                },
                 *pixel_size,
             );
             let composited = match fill {
-                Some(f) => crate::icon_render::composite_icon(
-                    *pixel_size,
-                    f,
-                    &layer_bgra,
-                    shadow.as_ref(),
-                )
-                .unwrap_or_else(|| layer_bgra.clone()),
+                Some(f) => {
+                    crate::icon_render::composite_icon(*pixel_size, f, &layer_bgra, shadow.as_ref())
+                        .unwrap_or_else(|| layer_bgra.clone())
+                }
                 None => layer_bgra.clone(),
             };
             // With the variant axis the composite is stored as a grayscale
@@ -1187,28 +1203,20 @@ fn build_icon_car(
                     // (premult gray 59 / α 60 over the squircle, plus the icon's
                     // black drop shadow) instead of the dark composite.
                     let dark = fill
-                        .and_then(|f| {
-                            build_dark_variant_tint(*pixel_size, f, shadow.as_ref())
-                        })
+                        .and_then(|f| build_dark_variant_tint(*pixel_size, f, shadow.as_ref()))
                         .unwrap_or_else(|| composited.clone());
                     (crate::catalog::bgra_to_ga16_force(&dark), *b"61AG", 6)
                 }
             } else {
-                (composited, *b"BGRA", car::colorspace_for_pixel_format(b"BGRA"))
+                (
+                    composited,
+                    *b"BGRA",
+                    car::colorspace_for_pixel_format(b"BGRA"),
+                )
             };
-            let name = pre_rendered_name(
-                icon_name,
-                point_size,
-                *scale,
-                "NSAppearanceNameSystem",
-            );
+            let name = pre_rendered_name(icon_name, point_size, *scale, "NSAppearanceNameSystem");
             if ATLAS_POINT_SIZES.contains(&point_size) {
-                let mut pi = crate::packer::PackedImage::new(
-                    name.clone(),
-                    ident as u32,
-                    w,
-                    h,
-                );
+                let mut pi = crate::packer::PackedImage::new(name.clone(), ident as u32, w, h);
                 pi.pixel_data = pd;
                 pi.pixel_format = pf;
                 pi.scale = *scale;
@@ -1447,11 +1455,8 @@ fn build_icon_car(
 
     for color in color_assets {
         let cident = hash_name(&color.facet_name);
-        let csi = car::build_icon_color_csi(
-            &color.facet_name,
-            color.colorspace_id,
-            &color.components,
-        );
+        let csi =
+            car::build_icon_color_csi(&color.facet_name, color.colorspace_id, &color.components);
         // Apple's Color rendition KEY has scale=1 (even though the CSI's own
         // scale_factor field is 0). CUICatalog filters lookups by scale=1
         // by default, so scale=0 keys are invisible to colorWithName:.
@@ -1488,12 +1493,7 @@ fn build_icon_car(
             .iter()
             .map(|(p, name)| (*p, name.as_str()))
             .collect();
-        let csi = car::build_icon_gradient_csi(
-            &grad.facet_name,
-            grad.geometry,
-            &stops,
-            grad.kind,
-        );
+        let csi = car::build_icon_gradient_csi(&grad.facet_name, grad.geometry, &stops, grad.kind);
         // Gradient KEYs follow the same scale=1 convention as Colors.
         renditions.push(Rendition {
             name: grad.facet_name.clone(),
@@ -1524,9 +1524,8 @@ fn build_icon_car(
     // Apple emits iconstack + IconGroup per non-system appearance for .icon
     // bundles. Only meaningful when we have a group + at least one image
     // layer + gradients to back the appearance variants.
-    let layered = !group_facet_names.is_empty()
-        && !layer_assets.is_empty()
-        && !gradient_assets.is_empty();
+    let layered =
+        !group_facet_names.is_empty() && !layer_assets.is_empty() && !gradient_assets.is_empty();
     if layered {
         let main_ident = hash_name(icon_name);
         let stack_name = format!("{icon_name}.iconstack");
@@ -1571,7 +1570,11 @@ fn build_icon_car(
                 .unwrap_or_else(|| gradient_assets[0].facet_name.clone()),
         );
         for appearance in [1u16, 8, 10] {
-            let grad_id = if appearance == 1 { grad2_ident } else { grad1_ident };
+            let grad_id = if appearance == 1 {
+                grad2_ident
+            } else {
+                grad1_ident
+            };
             // Stack the gradient at the bottom, then the groups back-to-front.
             // icon.json lists groups front-to-back (index 0 topmost), so the
             // painter's order reverses them.
@@ -1644,7 +1647,14 @@ fn build_icon_car(
     }
     all_entries.sort_by(|a, b| a.0.cmp(&b.0));
 
-    write_icon_car(car_path, &facets, &keyformat, &all_entries, platform, min_deploy)
+    write_icon_car(
+        car_path,
+        &facets,
+        &keyformat,
+        &all_entries,
+        platform,
+        min_deploy,
+    )
 }
 
 /// A layer's source image, emitted as a `<stem>_Assets/<layer_name>` facet
@@ -1741,7 +1751,7 @@ fn build_dark_variant_tint(
     let mut out = vec![0u8; n * 4];
     for i in 0..n {
         let m = mask[i * 4 + 3] as f32 / 255.0; // squircle coverage
-        // Black drop shadow restricted to the margin (outside the squircle).
+                                                // Black drop shadow restricted to the margin (outside the squircle).
         let sa = (shadowed[i * 4 + 3] as f32 / 255.0) * (1.0 - m);
         let tint_a = (DARK_TINT_ALPHA / 255.0) * m;
         let out_a = tint_a + sa * (1.0 - tint_a); // tint over black shadow
@@ -1763,7 +1773,10 @@ fn resolve_gradient_fill(
     colors: &[ColorAsset],
 ) -> Option<crate::icon_render::GradientFill> {
     let rgb = |facet: &str| -> Option<[f64; 3]> {
-        colors.iter().find(|c| c.facet_name == facet).map(color_to_rgb)
+        colors
+            .iter()
+            .find(|c| c.facet_name == facet)
+            .map(color_to_rgb)
     };
     let start_rgb = rgb(&grad.stops.first()?.1)?;
     let stop_rgb = rgb(&grad.stops.last()?.1)?;
@@ -1809,7 +1822,9 @@ fn flat_fill(rgb: [f64; 3]) -> crate::icon_render::GradientFill {
 /// light rendition paints this solid colour (not the dark `Gradient-1`, which
 /// is the dark-mode background), so it must drive the light composite directly.
 fn solid_fill_color(parsed: &IconJson) -> Option<[f64; 3]> {
-    let Some(Fill::Structured(v)) = parsed.fill.as_ref() else { return None };
+    let Some(Fill::Structured(v)) = parsed.fill.as_ref() else {
+        return None;
+    };
     let spec = v.get("solid").and_then(|x| x.as_str())?;
     let (_cspace, comps) = parse_color_spec(spec)?;
     comps_to_rgb(&comps)
@@ -1823,13 +1838,22 @@ fn resolve_background_fills(
     parsed: &IconJson,
     gradient_assets: &[GradientAsset],
     color_assets: &[ColorAsset],
-) -> (Option<crate::icon_render::GradientFill>, Option<crate::icon_render::GradientFill>) {
+) -> (
+    Option<crate::icon_render::GradientFill>,
+    Option<crate::icon_render::GradientFill>,
+) {
     if let Some(rgb) = solid_fill_color(parsed) {
-        let dark = gradient_assets.first().and_then(|g| resolve_gradient_fill(g, color_assets));
+        let dark = gradient_assets
+            .first()
+            .and_then(|g| resolve_gradient_fill(g, color_assets));
         return (Some(flat_fill(rgb)), dark);
     }
-    let light = gradient_assets.first().and_then(|g| resolve_gradient_fill(g, color_assets));
-    let dark = gradient_assets.get(1).and_then(|g| resolve_gradient_fill(g, color_assets));
+    let light = gradient_assets
+        .first()
+        .and_then(|g| resolve_gradient_fill(g, color_assets));
+    let dark = gradient_assets
+        .get(1)
+        .and_then(|g| resolve_gradient_fill(g, color_assets));
     (light, dark)
 }
 
@@ -1842,7 +1866,7 @@ fn resolve_background_fills(
 /// emitted CSI bytes match Apple's exactly.
 fn automatic_fill_assets(facet_prefix: &str) -> (Vec<ColorAsset>, Vec<GradientAsset>) {
     let n = |s: &str| format!("{facet_prefix}_Assets/{s}");
-    let g = |v: f32| (v as f32) as f64;
+    let g = |v: f32| v as f64;
     let colors = vec![
         ColorAsset {
             facet_name: n("Color-1"),
@@ -1964,7 +1988,7 @@ fn solid_fill_assets(
 ) -> Option<(Vec<ColorAsset>, Vec<GradientAsset>)> {
     let (user_cspace, user_components) = parse_color_spec(spec)?;
     let n = |s: &str| format!("{facet_prefix}_Assets/{s}");
-    let g = |v: f32| (v as f32) as f64;
+    let g = |v: f32| v as f64;
     let colors = vec![
         ColorAsset {
             facet_name: n("Color-1"),
@@ -2011,7 +2035,7 @@ fn linear_gradient_fill_assets(
     let (cs0, c0) = parse_color_spec(stops_spec[0])?;
     let (cs1, c1) = parse_color_spec(stops_spec[1])?;
     let n = |s: &str| format!("{facet_prefix}_Assets/{s}");
-    let g = |v: f32| (v as f32) as f64;
+    let g = |v: f32| v as f64;
     let colors = vec![
         ColorAsset {
             facet_name: n("Color-1"),
@@ -2067,7 +2091,7 @@ fn automatic_gradient_fill_assets(
 ) -> Option<(Vec<ColorAsset>, Vec<GradientAsset>)> {
     let (user_cspace, user_components) = parse_color_spec(spec)?;
     let n = |s: &str| format!("{facet_prefix}_Assets/{s}");
-    let g = |v: f32| (v as f32) as f64;
+    let g = |v: f32| v as f64;
     let colors = vec![
         ColorAsset {
             facet_name: n("Color-1"),
@@ -2112,7 +2136,7 @@ fn automatic_gradient_fill_assets(
 /// dark gradients. Per-layer fills are appended afterwards as Color-N+1.
 fn system_dark_fill_assets(facet_prefix: &str) -> (Vec<ColorAsset>, Vec<GradientAsset>) {
     let n = |s: &str| format!("{facet_prefix}_Assets/{s}");
-    let g = |v: f32| (v as f32) as f64;
+    let g = |v: f32| v as f64;
     let colors = vec![
         ColorAsset {
             facet_name: n("Color-1"),
@@ -2146,7 +2170,6 @@ fn system_dark_fill_assets(facet_prefix: &str) -> (Vec<ColorAsset>, Vec<Gradient
     ];
     (colors, gradients)
 }
-
 
 /// Resolve a fill-specialization keyword `value` to its background gray pair
 /// (top stop, bottom stop). "system-light"/"system-dark" are fixed; bare
@@ -2264,7 +2287,8 @@ fn process_fill_value(
     if let Some(s) = value.as_str() {
         if let Some((top, bottom)) = keyword_bg_pair(s, appearance) {
             let c0 = palette_add_color(colors, facet_prefix, 2, vec![g(top), g(1.0)], grad_floor);
-            let c1 = palette_add_color(colors, facet_prefix, 2, vec![g(bottom), g(1.0)], grad_floor);
+            let c1 =
+                palette_add_color(colors, facet_prefix, 2, vec![g(bottom), g(1.0)], grad_floor);
             palette_add_gradient(
                 gradients,
                 facet_prefix,
@@ -2288,7 +2312,13 @@ fn process_fill_value(
             let Some((cspace, comps)) = parse_color_spec(spec) else {
                 return;
             };
-            names.push(palette_add_color(colors, facet_prefix, cspace, comps, grad_floor));
+            names.push(palette_add_color(
+                colors,
+                facet_prefix,
+                cspace,
+                comps,
+                grad_floor,
+            ));
         }
         let last = (names.len() - 1) as f32;
         let stops: Vec<(f32, String)> = names
@@ -2316,7 +2346,7 @@ fn fill_specializations_assets(
     facet_prefix: &str,
     json: &IconJson,
 ) -> (Vec<ColorAsset>, Vec<GradientAsset>) {
-    let g = |v: f32| (v as f32) as f64;
+    let g = |v: f32| v as f64;
     let mut colors = vec![ColorAsset {
         facet_name: format!("{facet_prefix}_Assets/Color-1"),
         colorspace_id: 6,
@@ -2386,7 +2416,7 @@ fn fill_assets(
     if fill_is_automatic(fill) {
         let (mut colors, mut gradients) = automatic_fill_assets(facet_prefix);
         let base = colors.len();
-            append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
+        append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
         return Some((colors, gradients));
     }
     let fill_val = fill?;
@@ -2401,14 +2431,14 @@ fn fill_assets(
             if let Some(spec) = v.get("solid").and_then(|s| s.as_str()) {
                 let (mut colors, mut gradients) = solid_fill_assets(facet_prefix, spec)?;
                 let base = colors.len();
-            append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
+                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
                 return Some((colors, gradients));
             }
             if let Some(spec) = v.get("automatic-gradient").and_then(|s| s.as_str()) {
                 let (mut colors, mut gradients) =
                     automatic_gradient_fill_assets(facet_prefix, spec)?;
                 let base = colors.len();
-            append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
+                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
                 return Some((colors, gradients));
             }
             if let Some(arr) = v.get("linear-gradient").and_then(|s| s.as_array()) {
@@ -2416,7 +2446,7 @@ fn fill_assets(
                 let (mut colors, mut gradients) =
                     linear_gradient_fill_assets(facet_prefix, &specs)?;
                 let base = colors.len();
-            append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
+                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
                 return Some((colors, gradients));
             }
             None
@@ -2545,6 +2575,48 @@ fn build_bitmapkeys(
     Ok(out)
 }
 
+fn write_populated_partial_plist(path: &Path, icon_name: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    let body = format!(
+        concat!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+            "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n",
+            "<plist version=\"1.0\">\n",
+            "<dict>\n",
+            "\t<key>CFBundleIconFile</key>\n",
+            "\t<string>{name}</string>\n",
+            "\t<key>CFBundleIconName</key>\n",
+            "\t<string>{name}</string>\n",
+            "</dict>\n",
+            "</plist>\n",
+        ),
+        name = icon_name,
+    );
+    fs::write(path, body)?;
+    Ok(())
+}
+
+fn write_empty_partial_plist(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    let body = concat!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n",
+        "<plist version=\"1.0\">\n",
+        "<dict/>\n",
+        "</plist>\n",
+    );
+    fs::write(path, body)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2621,12 +2693,29 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let red = dir.join("red.png");
         write_solid_png(&red, [255, 0, 0, 255]);
-        let layers = vec![StackLayer { source: red, frosted: true, tinted: false, specular: false, shadow_strength: 0.0, scale: 1.0, tx: 0.0, ty: 0.0, opacity: 1.0, blend: BlendMode::Normal, native_w: 64, native_h: 64 }];
+        let layers = vec![StackLayer {
+            source: red,
+            frosted: true,
+            tinted: false,
+            specular: false,
+            shadow_strength: 0.0,
+            scale: 1.0,
+            tx: 0.0,
+            ty: 0.0,
+            opacity: 1.0,
+            blend: BlendMode::Normal,
+            native_w: 64,
+            native_h: 64,
+        }];
         let out = render_layer_stack(&layers, 64, None).unwrap();
         let i = (32 * 64 + 32) * 4; // centre, premul-first BGRA
         let (b, g, r, a) = (out[i], out[i + 1], out[i + 2], out[i + 3]);
         assert!((5..70).contains(&a), "glass alpha should be low, got {a}");
-        assert_eq!((b, g, r), (0, 0, 0), "colour stripped to premultiplied black");
+        assert_eq!(
+            (b, g, r),
+            (0, 0, 0),
+            "colour stripped to premultiplied black"
+        );
     }
 
     #[test]
@@ -2635,10 +2724,26 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let red = dir.join("red2.png");
         write_solid_png(&red, [255, 0, 0, 255]);
-        let layers = vec![StackLayer { source: red, frosted: false, tinted: false, specular: false, shadow_strength: 0.0, scale: 1.0, tx: 0.0, ty: 0.0, opacity: 1.0, blend: BlendMode::Normal, native_w: 64, native_h: 64 }];
+        let layers = vec![StackLayer {
+            source: red,
+            frosted: false,
+            tinted: false,
+            specular: false,
+            shadow_strength: 0.0,
+            scale: 1.0,
+            tx: 0.0,
+            ty: 0.0,
+            opacity: 1.0,
+            blend: BlendMode::Normal,
+            native_w: 64,
+            native_h: 64,
+        }];
         let out = render_layer_stack(&layers, 64, None).unwrap();
         let i = (32 * 64 + 32) * 4; // premul-first BGRA, opaque red
-        assert_eq!((out[i], out[i + 1], out[i + 2], out[i + 3]), (0, 0, 255, 255));
+        assert_eq!(
+            (out[i], out[i + 1], out[i + 2], out[i + 3]),
+            (0, 0, 255, 255)
+        );
     }
 
     #[test]
@@ -2677,13 +2782,18 @@ mod tests {
             native_h: 1024,
         };
         let i = (128 * 256 + 128) * 4; // centre at 256², premul-first BGRA
-        // One tinted blue layer over grey 153: out = 153 − 63.5·(1−col).
-        // R(col 0) ≈ 89, B(col 0.9) ≈ 147 — darkened, blue ordering preserved.
+                                       // One tinted blue layer over grey 153: out = 153 − 63.5·(1−col).
+                                       // R(col 0) ≈ 89, B(col 0.9) ≈ 147 — darkened, blue ordering preserved.
         let single = render_layer_stack(&[mk(&blue, true)], 256, Some(&grad)).unwrap();
         let (b1, g1, r1) = (single[i], single[i + 1], single[i + 2]);
-        assert!(b1 > g1 && g1 > r1, "blue tint ordering B>G>R, got {r1},{g1},{b1}");
-        assert!((80..100).contains(&r1) && (140..155).contains(&b1),
-            "subtractive tint magnitude off: {r1},{g1},{b1}");
+        assert!(
+            b1 > g1 && g1 > r1,
+            "blue tint ordering B>G>R, got {r1},{g1},{b1}"
+        );
+        assert!(
+            (80..100).contains(&r1) && (140..155).contains(&b1),
+            "subtractive tint magnitude off: {r1},{g1},{b1}"
+        );
         // Blue over red: stacked subtraction → far darker on every channel.
         let stacked =
             render_layer_stack(&[mk(&blue, true), mk(&red, true)], 256, Some(&grad)).unwrap();
@@ -2833,46 +2943,4 @@ mod tests {
         let cs: Vec<u32> = colors.iter().map(|c| c.colorspace_id).collect();
         assert_eq!(cs, vec![6, 2, 2, 2, 2]);
     }
-}
-
-fn write_populated_partial_plist(path: &Path, icon_name: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
-    }
-    let body = format!(
-        concat!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
-            "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n",
-            "<plist version=\"1.0\">\n",
-            "<dict>\n",
-            "\t<key>CFBundleIconFile</key>\n",
-            "\t<string>{name}</string>\n",
-            "\t<key>CFBundleIconName</key>\n",
-            "\t<string>{name}</string>\n",
-            "</dict>\n",
-            "</plist>\n",
-        ),
-        name = icon_name,
-    );
-    fs::write(path, body)?;
-    Ok(())
-}
-
-fn write_empty_partial_plist(path: &Path) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
-    }
-    let body = concat!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
-        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n",
-        "<plist version=\"1.0\">\n",
-        "<dict/>\n",
-        "</plist>\n",
-    );
-    fs::write(path, body)?;
-    Ok(())
 }

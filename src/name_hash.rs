@@ -19,12 +19,17 @@ pub fn hash_name(name: &str) -> u16 {
     let c3 = (h >> 48) & 0xFFFF;
     let m3 = M.wrapping_mul(M).wrapping_mul(M);
     let m2 = M.wrapping_mul(M);
-    let folded = c0.wrapping_mul(m3)
+    let folded = c0
+        .wrapping_mul(m3)
         .wrapping_add(c1.wrapping_mul(m2))
         .wrapping_add(c2.wrapping_mul(M))
         .wrapping_add(c3);
     let result = (folded & 0xFFFF) as u16;
-    if result == 0 { 1 } else { result }
+    if result == 0 {
+        1
+    } else {
+        result
+    }
 }
 
 #[cfg(test)]

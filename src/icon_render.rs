@@ -276,23 +276,21 @@ pub fn composite_icon(
         const PREMUL_FIRST: u32 = 2;
         const LE32: u32 = 2 << 12;
         let info = PREMUL_FIRST | LE32;
-        let ctx = (s.bitmap_create)(
-            std::ptr::null_mut(),
-            size,
-            size,
-            8,
-            size * 4,
-            cs,
-            info,
-        );
+        let ctx = (s.bitmap_create)(std::ptr::null_mut(), size, size, 8, size * 4, cs, info);
         if ctx.is_null() {
             (s.cs_release)(cs);
             return None;
         }
 
         let rect = CGRect {
-            origin: CGPoint { x: margin, y: margin },
-            size: CGSize { width: content, height: content },
+            origin: CGPoint {
+                x: margin,
+                y: margin,
+            },
+            size: CGSize {
+                width: content,
+                height: content,
+            },
         };
         let path = build_squircle_path(s, rect);
 
@@ -304,7 +302,10 @@ pub fn composite_icon(
             (s.ctx_save)(ctx);
             let color = (s.color_create)(cs, sh.color.as_ptr());
             // Context is bottom-up, so a downward screen offset is negative y.
-            let off = CGSize { width: sh.offset[0], height: -sh.offset[1] };
+            let off = CGSize {
+                width: sh.offset[0],
+                height: -sh.offset[1],
+            };
             (s.set_shadow)(ctx, off, sh.blur, color);
             (s.set_rgb_fill)(ctx, 1.0, 1.0, 1.0, 1.0);
             (s.ctx_add_path)(ctx, path);
@@ -365,7 +366,10 @@ pub fn composite_icon(
         if !img.is_null() {
             let full = CGRect {
                 origin: CGPoint { x: 0.0, y: 0.0 },
-                size: CGSize { width: size as f64, height: size as f64 },
+                size: CGSize {
+                    width: size as f64,
+                    height: size as f64,
+                },
             };
             (s.ctx_save)(ctx);
             (s.draw_image)(ctx, full, img);
@@ -374,8 +378,7 @@ pub fn composite_icon(
         }
         (s.provider_release)(provider);
 
-        let mut data =
-            std::slice::from_raw_parts((s.bitmap_data)(ctx), size * size * 4).to_vec();
+        let mut data = std::slice::from_raw_parts((s.bitmap_data)(ctx), size * size * 4).to_vec();
         (s.path_release)(path);
         (s.ctx_release)(ctx);
         (s.cs_release)(cs);
@@ -513,8 +516,17 @@ mod tests {
         let centre = g(size / 2, size / 2);
         let top_edge = g(size / 2, margin + 1);
         let bot_edge = g(size / 2, size - margin - 2);
-        assert!(top_edge > centre + 5, "top inner edge should brighten ({top_edge} vs {centre})");
-        assert!(bot_edge > centre + 3, "bottom inner edge should brighten ({bot_edge} vs {centre})");
-        assert!(top_edge >= bot_edge, "top should be ≥ bottom (light from top)");
+        assert!(
+            top_edge > centre + 5,
+            "top inner edge should brighten ({top_edge} vs {centre})"
+        );
+        assert!(
+            bot_edge > centre + 3,
+            "bottom inner edge should brighten ({bot_edge} vs {centre})"
+        );
+        assert!(
+            top_edge >= bot_edge,
+            "top should be ≥ bottom (light from top)"
+        );
     }
 }

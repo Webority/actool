@@ -75,7 +75,9 @@ fn parity_with_python_shelf_layout() {
         by_name.insert(img.name.clone(), (img.x, img.y));
     }
     for (name, ex_x, ex_y) in EXPECTED {
-        let (gx, gy) = by_name.get(*name).unwrap_or_else(|| panic!("missing {name}"));
+        let (gx, gy) = by_name
+            .get(*name)
+            .unwrap_or_else(|| panic!("missing {name}"));
         assert_eq!(
             (*gx, *gy),
             (*ex_x, *ex_y),

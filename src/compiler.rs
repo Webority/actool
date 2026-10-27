@@ -112,12 +112,8 @@ pub fn compile_catalog_with_icons(
             .iter()
             .map(|i| {
                 let r = &renditions[*i];
-                let mut pi = PackedImage::new(
-                    r.name.clone(),
-                    r.identifier as u32,
-                    r.width,
-                    r.height,
-                );
+                let mut pi =
+                    PackedImage::new(r.name.clone(), r.identifier as u32, r.width, r.height);
                 pi.pixel_format = r.pixel_format;
                 pi.scale = r.scale as u32;
                 pi.part = r.part as u32;
@@ -157,8 +153,10 @@ pub fn compile_catalog_with_icons(
     pack_groups.sort_by_key(|(fmt, scale, _)| (*scale, if fmt == b"BGRA" { 0 } else { 1 }));
 
     for (fmt, scale, idxs) in &pack_groups {
-        let sprite_atlas_id =
-            idxs.first().map(|i| renditions[*i].sprite_atlas_id).unwrap_or(0);
+        let sprite_atlas_id = idxs
+            .first()
+            .map(|i| renditions[*i].sprite_atlas_id)
+            .unwrap_or(0);
         // All renditions in a pack group share an idiom (it's part of the
         // group key), so the first one names the group's idiom.
         let group_idiom = idxs.first().map(|i| renditions[*i].idiom).unwrap_or(0);
@@ -209,7 +207,9 @@ pub fn compile_catalog_with_icons(
             let force_lzfse = fmt == b"BGRA" && all_icons;
 
             let atlas_name = if sprite_atlas_id != 0 {
-                atlas.name().replace("ZZZZPackedAsset", "ZZZZExplicitlyPackedAsset")
+                atlas
+                    .name()
+                    .replace("ZZZZPackedAsset", "ZZZZExplicitlyPackedAsset")
             } else {
                 atlas.name()
             };
@@ -397,10 +397,7 @@ pub fn compile_catalog_with_icons(
     // JPEG-in-CAR threshold. Named after the imageset stem with the
     // source file's extension preserved (matches host actool).
     for (imageset_stem, src) in &catalog.loose_jpegs {
-        let ext = src
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("jpg");
+        let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("jpg");
         let dest = output_dir.join(format!("{imageset_stem}.{ext}"));
         fs::copy(src, &dest)?;
         output_files.push(fs::canonicalize(&dest).unwrap_or(dest));
@@ -629,7 +626,11 @@ fn ios_loose_icons(icons: &[IconImage], name: &str) -> Vec<LooseIcon> {
 /// or empty when the catalog has no home-screen icon for that idiom.
 fn ios_icon_files(icons: &[IconImage], name: &str, idiom: &str) -> Vec<String> {
     match ios_primary_size(idiom) {
-        Some(primary) if icons.iter().any(|i| i.idiom == idiom && i.point_w == primary) => {
+        Some(primary)
+            if icons
+                .iter()
+                .any(|i| i.idiom == idiom && i.point_w == primary) =>
+        {
             vec![format!("{name}{primary}x{primary}")]
         }
         _ => Vec::new(),

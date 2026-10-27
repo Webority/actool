@@ -9,17 +9,11 @@ use std::path::{Path, PathBuf};
 fn platform_idioms(platform: &str) -> HashSet<&'static str> {
     match platform {
         "macosx" => ["mac", "universal"].into_iter().collect(),
-        "iphoneos" | "iphonesimulator" => {
-            ["iphone", "ipad", "ios-marketing", "car", "universal"]
-                .into_iter()
-                .collect()
-        }
-        "watchos" | "watchsimulator" => {
-            ["watch", "universal"].into_iter().collect()
-        }
-        "appletvos" | "appletvsimulator" => {
-            ["tv", "universal"].into_iter().collect()
-        }
+        "iphoneos" | "iphonesimulator" => ["iphone", "ipad", "ios-marketing", "car", "universal"]
+            .into_iter()
+            .collect(),
+        "watchos" | "watchsimulator" => ["watch", "universal"].into_iter().collect(),
+        "appletvos" | "appletvsimulator" => ["tv", "universal"].into_iter().collect(),
         _ => ["universal"].into_iter().collect(),
     }
 }
@@ -99,9 +93,17 @@ fn walk_assets_inner(
             continue;
         }
         let contents = item.join("Contents.json");
-        let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let namespaced = format!("{namespace}{name}");
-        let file_name = item.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let file_name = item
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let rel = if rel_prefix.is_empty() {
             file_name.clone()
         } else {
@@ -302,7 +304,12 @@ pub fn swift_identifier(name: &str, kind: &str) -> String {
             }
         }
     }
-    if out.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+    if out
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+    {
         out.insert(0, '_');
     }
     out
@@ -390,8 +397,8 @@ pub fn generate_symbol_index(
     platform: &str,
 ) -> Result<()> {
     let assets = walk_assets(xcassets_path, platform);
-    let catalog_abs = fs::canonicalize(xcassets_path)
-        .unwrap_or_else(|_| xcassets_path.to_path_buf());
+    let catalog_abs =
+        fs::canonicalize(xcassets_path).unwrap_or_else(|_| xcassets_path.to_path_buf());
     let catalog_str = catalog_abs.to_string_lossy().into_owned();
 
     let mut colors: Vec<_> = assets
@@ -407,7 +414,10 @@ pub fn generate_symbol_index(
 
     fn entry(asset: &Asset, catalog: &str) -> IndexMap<String, plist::Value> {
         let mut m = IndexMap::new();
-        m.insert("catalogPath".to_string(), plist::Value::String(catalog.to_string()));
+        m.insert(
+            "catalogPath".to_string(),
+            plist::Value::String(catalog.to_string()),
+        );
         m.insert(
             "objcSymbol".to_string(),
             plist::Value::String(objc_symbol_name(&asset.kind, &asset.leaf_name)),

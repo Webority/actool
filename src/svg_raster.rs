@@ -64,12 +64,7 @@ pub fn has_coresvg() -> bool {
 /// the failure and let the caller skip/fall back (it never panics or links an
 /// Apple framework).
 #[cfg(not(target_os = "macos"))]
-pub fn rasterize_svg(
-    _svg_data: &[u8],
-    _width: u32,
-    _height: u32,
-    _scale: u32,
-) -> Result<Vec<u8>> {
+pub fn rasterize_svg(_svg_data: &[u8], _width: u32, _height: u32, _scale: u32) -> Result<Vec<u8>> {
     Err(anyhow::anyhow!(
         "CoreSVG rasterization is only available on macOS"
     ))
@@ -187,12 +182,7 @@ mod imp {
 
     /// Rasterize SVG data into a `BGRA` (little-endian ARGB premultiplied)
     /// pixel buffer of `(width*scale) x (height*scale)`.
-    pub fn rasterize_svg(
-        svg_data: &[u8],
-        width: u32,
-        height: u32,
-        scale: u32,
-    ) -> Result<Vec<u8>> {
+    pub fn rasterize_svg(svg_data: &[u8], width: u32, height: u32, scale: u32) -> Result<Vec<u8>> {
         let syms = load_syms().ok_or_else(|| anyhow!("CoreSVG framework not available"))?;
         let pixel_w = (width * scale) as usize;
         let pixel_h = (height * scale) as usize;
@@ -218,8 +208,8 @@ mod imp {
 
             const K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST: u32 = 2;
             const K_CG_BITMAP_BYTE_ORDER_32_LITTLE: u32 = 2 << 12;
-            let bitmap_info = K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST
-                | K_CG_BITMAP_BYTE_ORDER_32_LITTLE;
+            let bitmap_info =
+                K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST | K_CG_BITMAP_BYTE_ORDER_32_LITTLE;
             let bpr = pixel_w * 4;
             let ctx = (syms.bitmap_create)(
                 std::ptr::null_mut(),

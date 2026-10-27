@@ -75,7 +75,7 @@ fn parse_car(path: &Path) -> ParsedCar {
     }
 }
 
-fn block_bytes<'a>(parsed: &'a ParsedCar, idx: u32) -> &'a [u8] {
+fn block_bytes(parsed: &ParsedCar, idx: u32) -> &[u8] {
     let (addr, ln) = parsed.blocks[&idx];
     &parsed.data[addr as usize..(addr + ln) as usize]
 }
@@ -280,7 +280,10 @@ fn facet_identifiers(parsed: &ParsedCar) -> std::collections::HashMap<String, u1
 /// `e714876` fixed.
 fn bitmapkeys_idents(parsed: &ParsedCar) -> Vec<u32> {
     let root = tree_root_idx(parsed, "BITMAPKEYS");
-    walk_raw_key_tree(parsed, root).into_iter().map(|(k, _)| k).collect()
+    walk_raw_key_tree(parsed, root)
+        .into_iter()
+        .map(|(k, _)| k)
+        .collect()
 }
 
 /// Audit the RENDITIONS leaf inline-key region. Returns true when each
@@ -326,19 +329,34 @@ fn synthetic_png_automatic_fill_produces_iconcomposer_catalog() {
 
     // Bundle stem "Synth" matches --app-icon "Synth" → icns emitted.
     assert!(files.iter().any(|p| p.ends_with("Assets.car")));
-    assert!(files.iter().any(|p| p.ends_with("Synth.icns")),
-        "bundle stem matches --app-icon: standalone .icns required");
+    assert!(
+        files.iter().any(|p| p.ends_with("Synth.icns")),
+        "bundle stem matches --app-icon: standalone .icns required"
+    );
 
     let car = parse_car(&out.join("Assets.car"));
 
     // CARHEADER must declare CoreUI 975 — lower values cause silent
     // CUICatalog lookup failures (commit e714876).
-    assert_eq!(car.coreui_version, 975, "CoreUI version must be 975 for .icon catalogs");
+    assert_eq!(
+        car.coreui_version, 975,
+        "CoreUI version must be 975 for .icon catalogs"
+    );
 
     // Required named blocks present.
-    for required in ["CARHEADER", "RENDITIONS", "FACETKEYS", "APPEARANCEKEYS",
-                      "KEYFORMAT", "EXTENDED_METADATA", "BITMAPKEYS"] {
-        assert!(car.named.contains_key(required), "missing named block: {required}");
+    for required in [
+        "CARHEADER",
+        "RENDITIONS",
+        "FACETKEYS",
+        "APPEARANCEKEYS",
+        "KEYFORMAT",
+        "EXTENDED_METADATA",
+        "BITMAPKEYS",
+    ] {
+        assert!(
+            car.named.contains_key(required),
+            "missing named block: {required}"
+        );
     }
 
     // Facet inventory: main icon + group + per-layer asset + automatic-fill
@@ -355,23 +373,35 @@ fn synthetic_png_automatic_fill_produces_iconcomposer_catalog() {
         "Synth_Assets/Color-5",
         "Synth_Assets/Gradient-1",
         "Synth_Assets/Gradient-2",
-    ].iter().map(|s| s.to_string()).collect();
-    assert_eq!(facets, expected, "facet inventory mismatch for automatic fill");
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    assert_eq!(
+        facets, expected,
+        "facet inventory mismatch for automatic fill"
+    );
 
     // BITMAPKEYS must list one entry per facet identifier — empty
     // BITMAPKEYS is the silent CUICatalog-failure mode.
     let bk = bitmapkeys_idents(&car);
-    let ident_values: std::collections::HashSet<u32> =
-        facet_identifiers(&car).into_values().map(|v| v as u32).collect();
+    let ident_values: std::collections::HashSet<u32> = facet_identifiers(&car)
+        .into_values()
+        .map(|v| v as u32)
+        .collect();
     let bk_set: std::collections::HashSet<u32> = bk.into_iter().collect();
-    assert_eq!(bk_set, ident_values,
-        "BITMAPKEYS must contain one entry per facet identifier");
+    assert_eq!(
+        bk_set, ident_values,
+        "BITMAPKEYS must contain one entry per facet identifier"
+    );
 
     // Inline-key region right after the entry table + 4-byte gap must
     // mirror the separately-stored key blocks. This catches the
     // build_leaf_node regression that produced empty lookups.
-    assert!(renditions_leaf_inline_matches(&car),
-        "RENDITIONS leaf inline-key region doesn't match key blocks");
+    assert!(
+        renditions_leaf_inline_matches(&car),
+        "RENDITIONS leaf inline-key region doesn't match key blocks"
+    );
 }
 
 #[test]
@@ -392,19 +422,35 @@ fn solid_srgb_fill_emits_4_colors_1_gradient_with_user_color() {
 
     // Stem "Solid" matches --app-icon "Solid" → icns emitted regardless
     // of supported-platforms shape.
-    assert!(files.iter().any(|p| p.ends_with("Solid.icns")),
-        "matching stem requires standalone .icns");
+    assert!(
+        files.iter().any(|p| p.ends_with("Solid.icns")),
+        "matching stem requires standalone .icns"
+    );
 
     let car = parse_car(&out.join("Assets.car"));
     let facets: std::collections::HashSet<_> = facet_names(&car).into_iter().collect();
     // Unnamed group falls back to "Group".
-    assert!(facets.contains("Solid/Group"),
-        "unnamed group should produce `<stem>/Group` facet");
+    assert!(
+        facets.contains("Solid/Group"),
+        "unnamed group should produce `<stem>/Group` facet"
+    );
     // Solid fill produces 4 Colors + 1 Gradient (vs automatic's 5 + 2).
-    let color_count = facets.iter().filter(|f| f.contains("_Assets/Color-")).count();
-    let gradient_count = facets.iter().filter(|f| f.contains("_Assets/Gradient-")).count();
-    assert_eq!(color_count, 4, "solid fill expected 4 Colors, got {color_count}");
-    assert_eq!(gradient_count, 1, "solid fill expected 1 Gradient, got {gradient_count}");
+    let color_count = facets
+        .iter()
+        .filter(|f| f.contains("_Assets/Color-"))
+        .count();
+    let gradient_count = facets
+        .iter()
+        .filter(|f| f.contains("_Assets/Gradient-"))
+        .count();
+    assert_eq!(
+        color_count, 4,
+        "solid fill expected 4 Colors, got {color_count}"
+    );
+    assert_eq!(
+        gradient_count, 1,
+        "solid fill expected 1 Gradient, got {gradient_count}"
+    );
 
     // Color-2 should carry the user's srgb spec at cspace=1 with rounded
     // f32 components. Find its CSI by name and inspect.
@@ -452,17 +498,14 @@ fn solid_srgb_fill_emits_4_colors_1_gradient_with_user_color() {
     // The RENDITION KEY for Color-2 must use scale=1 (not 0) — that was a
     // separate silent CUICatalog filter bug fixed in e714876.
     let kf_block = block_bytes(&car, car.named["KEYFORMAT"]);
-    let n_kf = u32::from_le_bytes([kf_block[8], kf_block[9], kf_block[10], kf_block[11]])
-        as usize;
+    let n_kf = u32::from_le_bytes([kf_block[8], kf_block[9], kf_block[10], kf_block[11]]) as usize;
     let attrs: Vec<u16> = (0..n_kf)
-        .map(|i| {
-            u16::from_le_bytes([
-                kf_block[12 + i * 4],
-                kf_block[13 + i * 4],
-            ])
-        })
+        .map(|i| u16::from_le_bytes([kf_block[12 + i * 4], kf_block[13 + i * 4]]))
         .collect();
-    let scale_pos = attrs.iter().position(|&a| a == 12).expect("scale attr 12 in keyformat");
+    let scale_pos = attrs
+        .iter()
+        .position(|&a| a == 12)
+        .expect("scale attr 12 in keyformat");
     let mut found_color2_with_scale_1 = false;
     for (key, val) in walk_tree(&car, renditions_root) {
         if val.len() < 184 || &val[..4] != b"ISTC" {
@@ -476,14 +519,17 @@ fn solid_srgb_fill_emits_4_colors_1_gradient_with_user_color() {
         if !name.ends_with("Color-2") {
             continue;
         }
-        let scale = u16::from_le_bytes([
-            key[scale_pos * 2],
-            key[scale_pos * 2 + 1],
-        ]);
-        assert_eq!(scale, 1, "Color rendition KEY must have scale=1 (was {scale})");
+        let scale = u16::from_le_bytes([key[scale_pos * 2], key[scale_pos * 2 + 1]]);
+        assert_eq!(
+            scale, 1,
+            "Color rendition KEY must have scale=1 (was {scale})"
+        );
         found_color2_with_scale_1 = true;
     }
-    assert!(found_color2_with_scale_1, "Color-2 rendition not found in tree");
+    assert!(
+        found_color2_with_scale_1,
+        "Color-2 rendition not found in tree"
+    );
 }
 
 #[test]
@@ -502,7 +548,7 @@ fn svg_source_bundle_does_not_emit_legacy_pdf_only_catalog() {
         dir.path(),
         "Vec",
         "main.svg",
-        |p| write_synthetic_svg(p),
+        write_synthetic_svg,
         serde_json::Value::String("automatic".to_string()),
         Some("Figma"),
         serde_json::json!({"squares": ["macOS"]}),
@@ -539,7 +585,10 @@ fn svg_source_bundle_does_not_emit_legacy_pdf_only_catalog() {
             png_layer_rendition_count += 1;
         }
     }
-    assert!(has_multisize, "SVG-source .icon must emit a multisize aggregate");
+    assert!(
+        has_multisize,
+        "SVG-source .icon must emit a multisize aggregate"
+    );
     assert_eq!(
         svg_layer_rendition_count, 1,
         "SVG-source layer should be stored as exactly one Vector image.svg rendition"
@@ -550,7 +599,10 @@ fn svg_source_bundle_does_not_emit_legacy_pdf_only_catalog() {
     );
     // Exactly one LAYOUT_PDF — the layer vector — and it must not be the
     // whole catalog (the legacy PDF-only path is the SIGSEGV regression).
-    assert_eq!(pdf_layout_count, 1, "expected exactly the layer Vector rendition");
+    assert_eq!(
+        pdf_layout_count, 1,
+        "expected exactly the layer Vector rendition"
+    );
     assert!(
         total_renditions > 5,
         "PDF-only catalog regression: only {total_renditions} renditions"
@@ -570,17 +622,43 @@ fn icns_gate_matches_apple_on_bundle_stem_vs_app_icon() {
     let parent = tempdir();
     for (label, stem, app_icon, supported, expect_icns) in [
         // Match — must emit, regardless of supported-platforms.
-        ("match_macos_only", "Match", "Match",
-            serde_json::json!({"squares": ["macOS"]}), true),
-        ("match_shared", "Match2", "Match2",
-            serde_json::json!({"squares": "shared"}), true),
-        ("match_absent", "Match3", "Match3", serde_json::Value::Null, true),
+        (
+            "match_macos_only",
+            "Match",
+            "Match",
+            serde_json::json!({"squares": ["macOS"]}),
+            true,
+        ),
+        (
+            "match_shared",
+            "Match2",
+            "Match2",
+            serde_json::json!({"squares": "shared"}),
+            true,
+        ),
+        (
+            "match_absent",
+            "Match3",
+            "Match3",
+            serde_json::Value::Null,
+            true,
+        ),
         // Mismatch — case-sensitive comparison fails → no icns.
-        ("case_mismatch", "icon", "Icon",
-            serde_json::json!({"squares": ["macOS"]}), false),
+        (
+            "case_mismatch",
+            "icon",
+            "Icon",
+            serde_json::json!({"squares": ["macOS"]}),
+            false,
+        ),
         // Mismatch — entirely different names.
-        ("name_mismatch", "Mismatch", "Other",
-            serde_json::json!({"squares": "shared"}), false),
+        (
+            "name_mismatch",
+            "Mismatch",
+            "Other",
+            serde_json::json!({"squares": "shared"}),
+            false,
+        ),
     ] {
         let bundle = build_icon_bundle(
             parent.path(),
@@ -604,13 +682,19 @@ fn icns_gate_matches_apple_on_bundle_stem_vs_app_icon() {
 
         let plist = fs::read_to_string(out.join("info.plist")).expect("plist");
         if expect_icns {
-            assert!(plist.contains("CFBundleIconFile"),
-                "{label}: expected populated plist when emitting icns");
-            assert!(plist.contains(&format!("<string>{app_icon}</string>")),
-                "{label}: plist must reference the --app-icon name");
+            assert!(
+                plist.contains("CFBundleIconFile"),
+                "{label}: expected populated plist when emitting icns"
+            );
+            assert!(
+                plist.contains(&format!("<string>{app_icon}</string>")),
+                "{label}: plist must reference the --app-icon name"
+            );
         } else {
-            assert!(plist.contains("<dict/>"),
-                "{label}: expected empty <dict/> plist when not emitting icns");
+            assert!(
+                plist.contains("<dict/>"),
+                "{label}: expected empty <dict/> plist when not emitting icns"
+            );
         }
     }
 }
@@ -677,7 +761,9 @@ fn two_overlapping_glass_groups_compile_and_load() {
     }
     // BITMAPKEYS must list one entry per facet identifier (silent-failure guard).
     let bk: std::collections::HashSet<u32> = bitmapkeys_idents(&car).into_iter().collect();
-    let idents: std::collections::HashSet<u32> =
-        facet_identifiers(&car).into_values().map(|v| v as u32).collect();
+    let idents: std::collections::HashSet<u32> = facet_identifiers(&car)
+        .into_values()
+        .map(|v| v as u32)
+        .collect();
     assert_eq!(bk, idents, "BITMAPKEYS must cover every facet identifier");
 }

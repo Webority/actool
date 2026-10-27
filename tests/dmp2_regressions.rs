@@ -26,7 +26,9 @@ fn dmp2_used_for_atlas_at_11_0() {
 #[test]
 fn lzfse_used_for_standalone_at_11_0() {
     let data = pixel_data(64, 64, 4);
-    let out = compress_data(&data, b"BGRA", 64, 64, "11.0", "macosx", false, false, false);
+    let out = compress_data(
+        &data, b"BGRA", 64, 64, "11.0", "macosx", false, false, false,
+    );
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_ne!(comp, 11, "standalone images should not use DMP2");
 }
@@ -34,7 +36,9 @@ fn lzfse_used_for_standalone_at_11_0() {
 #[test]
 fn no_dmp2_at_10_15() {
     let data = pixel_data(64, 64, 4);
-    let out = compress_data(&data, b"BGRA", 64, 64, "10.15", "macosx", true, false, false);
+    let out = compress_data(
+        &data, b"BGRA", 64, 64, "10.15", "macosx", true, false, false,
+    );
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_ne!(comp, 11, "DMP2 should not be used for target < 11.0");
 }
@@ -42,7 +46,9 @@ fn no_dmp2_at_10_15() {
 #[test]
 fn no_dmp2_at_10_11() {
     let data = pixel_data(64, 64, 4);
-    let out = compress_data(&data, b"BGRA", 64, 64, "10.11", "macosx", true, false, false);
+    let out = compress_data(
+        &data, b"BGRA", 64, 64, "10.11", "macosx", true, false, false,
+    );
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_ne!(comp, 11);
 }

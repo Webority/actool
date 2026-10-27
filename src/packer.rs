@@ -119,7 +119,7 @@ impl Atlas {
     pub fn bytes_per_row(&self) -> usize {
         let bpp = Self::bpp_for_format(&self.pixel_format);
         let exact = self.width as usize * bpp;
-        ((exact + 31) / 32) * 32
+        exact.div_ceil(32) * 32
     }
 
     /// Blit all packed images into a single atlas pixel buffer. Rows are
@@ -225,8 +225,7 @@ fn pack_shelf_atlas(
             };
 
             if img.height <= shelf.height {
-                let mut width_ok =
-                    is_first_shelf && new_x + img.width + MARGIN <= max_width;
+                let mut width_ok = is_first_shelf && new_x + img.width + MARGIN <= max_width;
                 if !width_ok && atlas_width > 0 {
                     width_ok = new_x + img.width + MARGIN <= atlas_width;
                 }
@@ -358,7 +357,12 @@ pub fn group_for_packing(
             force_inline.push(i);
             continue;
         }
-        let key = (rend.pixel_format, rend.scale, rend.sprite_atlas_id, rend.idiom);
+        let key = (
+            rend.pixel_format,
+            rend.scale,
+            rend.sprite_atlas_id,
+            rend.idiom,
+        );
         groups.entry(key).or_default().push(i);
     }
 
@@ -426,11 +430,7 @@ mod tests {
 
     #[test]
     fn two_images_same_height_go_into_columns() {
-        let atlases = pack_images_split(
-            vec![img("a", 10, 20), img("b", 15, 20)],
-            262,
-            196,
-        );
+        let atlases = pack_images_split(vec![img("a", 10, 20), img("b", 15, 20)], 262, 196);
         assert_eq!(atlases.len(), 1);
         let atlas = &atlases[0];
         assert_eq!(atlas.images.len(), 2);
@@ -516,6 +516,9 @@ mod tests {
         assert_eq!(&atlas.pixel_data[..8], &[1, 2, 3, 4, 5, 6, 7, 8]);
         // Second row offset = bytes_per_row (64 for width=10 BGRA)
         let bpr = atlas.bytes_per_row();
-        assert_eq!(&atlas.pixel_data[bpr..bpr + 8], &[9, 10, 11, 12, 13, 14, 15, 16]);
+        assert_eq!(
+            &atlas.pixel_data[bpr..bpr + 8],
+            &[9, 10, 11, 12, 13, 14, 15, 16]
+        );
     }
 }

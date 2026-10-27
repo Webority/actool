@@ -91,10 +91,10 @@ pub struct IconEffects {
 
 /// Pick the `value` of the specialization entry that applies to `appearance`:
 /// an exact appearance match, else the default (no-appearance) entry.
-fn spec_value<'a>(specs: &'a [Value], appearance: Appearance) -> Option<&'a Value> {
-    let exact = specs.iter().find(|s| {
-        s.get("appearance").and_then(|a| a.as_str()) == Some(appearance.json_name())
-    });
+fn spec_value(specs: &[Value], appearance: Appearance) -> Option<&Value> {
+    let exact = specs
+        .iter()
+        .find(|s| s.get("appearance").and_then(|a| a.as_str()) == Some(appearance.json_name()));
     exact
         .or_else(|| specs.iter().find(|s| s.get("appearance").is_none()))
         .and_then(|s| s.get("value"))
@@ -108,9 +108,7 @@ fn resolve<'a, T>(
     appearance: Appearance,
     f: impl Fn(&Value) -> Option<T>,
 ) -> Option<T> {
-    let v = specs
-        .and_then(|s| spec_value(s, appearance))
-        .or(plain);
+    let v = specs.and_then(|s| spec_value(s, appearance)).or(plain);
     v.and_then(f)
 }
 
@@ -118,7 +116,11 @@ fn parse_shadow(v: &Value) -> Option<ShadowSpec> {
     // The value may be a string ("none") or an object {kind, opacity}.
     if let Some(s) = v.as_str() {
         return Some(ShadowSpec {
-            kind: if s == "none" { ShadowKind::None } else { ShadowKind::Neutral },
+            kind: if s == "none" {
+                ShadowKind::None
+            } else {
+                ShadowKind::Neutral
+            },
             opacity: 1.0,
         });
     }
@@ -179,7 +181,12 @@ fn resolve_layer(layer: &Layer, appearance: Appearance) -> LayerEffects {
         |v| v.as_bool(),
     )
     .unwrap_or(false);
-    LayerEffects { glass, opacity, blend_mode, hidden }
+    LayerEffects {
+        glass,
+        opacity,
+        blend_mode,
+        hidden,
+    }
 }
 
 /// Resolve every shading input for `group` at `appearance`.
@@ -194,7 +201,10 @@ pub fn resolve_icon_effects(group: &Group, appearance: Appearance) -> IconEffect
         appearance,
         parse_shadow,
     )
-    .unwrap_or(ShadowSpec { kind: ShadowKind::None, opacity: 1.0 });
+    .unwrap_or(ShadowSpec {
+        kind: ShadowKind::None,
+        opacity: 1.0,
+    });
 
     let specular = resolve(
         group.specular_specializations.as_ref(),
@@ -213,7 +223,10 @@ pub fn resolve_icon_effects(group: &Group, appearance: Appearance) -> IconEffect
         appearance,
         parse_translucency,
     )
-    .unwrap_or(Translucency { enabled: false, value: 0.0 });
+    .unwrap_or(Translucency {
+        enabled: false,
+        value: 0.0,
+    });
 
     let blur_material = resolve(
         group.blur_material_specializations.as_ref(),
@@ -282,7 +295,12 @@ mod tests {
     use crate::icon_json::IconJson;
 
     fn group0(json: &str) -> Group {
-        IconJson::parse(json).unwrap().groups.into_iter().next().unwrap()
+        IconJson::parse(json)
+            .unwrap()
+            .groups
+            .into_iter()
+            .next()
+            .unwrap()
     }
 
     #[test]

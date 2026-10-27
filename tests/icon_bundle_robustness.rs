@@ -17,17 +17,13 @@ static TMP_SEQ: AtomicU32 = AtomicU32::new(0);
 
 fn tmpdir() -> PathBuf {
     let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "actool_robust_{}_{seq}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("actool_robust_{}_{seq}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
 fn write_synthetic_png(path: &Path, size: u32, rgba: [u8; 4]) {
-    let buf =
-        image::ImageBuffer::from_pixel(size, size, image::Rgba(rgba));
+    let buf = image::ImageBuffer::from_pixel(size, size, image::Rgba(rgba));
     image::DynamicImage::ImageRgba8(buf).save(path).unwrap();
 }
 
@@ -87,7 +83,7 @@ fn assert_three_file_output(files: &[PathBuf], stem: &str) {
         "missing info.plist in {files:?}"
     );
     assert!(
-        files.iter().any(|p| p.ends_with(&format!("{stem}.icns"))),
+        files.iter().any(|p| p.ends_with(format!("{stem}.icns"))),
         "missing {stem}.icns in {files:?}"
     );
 }
@@ -239,11 +235,20 @@ fn missing_icon_json_returns_clean_error() {
     std::fs::create_dir_all(&out).unwrap();
     let plist = out.join("info.plist");
     let res = compile_icon_bundle(
-        &bundle, &out, "macosx", "26.0",
-        Some("NoJson"), Some(&plist), None, "default",
+        &bundle,
+        &out,
+        "macosx",
+        "26.0",
+        Some("NoJson"),
+        Some(&plist),
+        None,
+        "default",
     );
     let msg = res.expect_err("must err").to_string();
-    assert!(msg.contains("icon.json"), "msg should mention icon.json: {msg}");
+    assert!(
+        msg.contains("icon.json"),
+        "msg should mention icon.json: {msg}"
+    );
 }
 
 #[test]
@@ -255,8 +260,14 @@ fn bundle_is_file_returns_clean_error() {
     std::fs::create_dir_all(&out).unwrap();
     let plist = out.join("info.plist");
     let res = compile_icon_bundle(
-        &bundle, &out, "macosx", "26.0",
-        Some("FileBundle"), Some(&plist), None, "default",
+        &bundle,
+        &out,
+        "macosx",
+        "26.0",
+        Some("FileBundle"),
+        Some(&plist),
+        None,
+        "default",
     );
     assert!(res.is_err(), "bundle that is a file must error");
 }
@@ -279,8 +290,14 @@ fn empty_groups_array_succeeds_with_no_outputs() {
     let (bundle, out) = make_bundle("EmptyGroups", r#"{"groups":[]}"#);
     let plist = out.join("info.plist");
     let files = compile_icon_bundle(
-        &bundle, &out, "macosx", "26.0",
-        Some("EmptyGroups"), Some(&plist), None, "default",
+        &bundle,
+        &out,
+        "macosx",
+        "26.0",
+        Some("EmptyGroups"),
+        Some(&plist),
+        None,
+        "default",
     )
     .expect("empty groups array must not error");
     assert!(files.is_empty(), "no source images → no outputs");
@@ -288,15 +305,15 @@ fn empty_groups_array_succeeds_with_no_outputs() {
 
 #[test]
 fn layer_without_image_name_returns_clean_error() {
-    let msg = compile_err(
-        "NoImg",
-        r#"{"groups":[{"layers":[{"name":"only_name"}]}]}"#,
-    );
+    let msg = compile_err("NoImg", r#"{"groups":[{"layers":[{"name":"only_name"}]}]}"#);
     assert!(
         msg.contains("does not have an image name"),
         "msg should describe the missing image-name: {msg}"
     );
-    assert!(msg.contains("only_name"), "msg should include layer name: {msg}");
+    assert!(
+        msg.contains("only_name"),
+        "msg should include layer name: {msg}"
+    );
 }
 
 #[test]
@@ -309,7 +326,10 @@ fn missing_referenced_image_returns_clean_error() {
         msg.contains("does not exist"),
         "msg should say image does not exist: {msg}"
     );
-    assert!(msg.contains("nope.png"), "msg should name the missing file: {msg}");
+    assert!(
+        msg.contains("nope.png"),
+        "msg should name the missing file: {msg}"
+    );
 }
 
 #[test]
@@ -323,8 +343,14 @@ fn malformed_json_returns_clean_error() {
     std::fs::create_dir_all(&out).unwrap();
     let plist = out.join("info.plist");
     let res = compile_icon_bundle(
-        &bundle, &out, "macosx", "26.0",
-        Some("Mal"), Some(&plist), None, "default",
+        &bundle,
+        &out,
+        "macosx",
+        "26.0",
+        Some("Mal"),
+        Some(&plist),
+        None,
+        "default",
     );
     assert!(res.is_err(), "malformed JSON must error");
 }
@@ -355,8 +381,14 @@ fn zero_byte_image_returns_clean_error() {
     std::fs::create_dir_all(&out).unwrap();
     let plist = out.join("info.plist");
     let res = compile_icon_bundle(
-        &bundle, &out, "macosx", "26.0",
-        Some("Z"), Some(&plist), None, "default",
+        &bundle,
+        &out,
+        "macosx",
+        "26.0",
+        Some("Z"),
+        Some(&plist),
+        None,
+        "default",
     );
     assert!(res.is_err(), "zero-byte PNG must error");
 }
@@ -377,10 +409,7 @@ fn fifty_groups_compile_without_panic() {
         ));
     }
     groups.push(']');
-    let files = compile_ok(
-        "Many",
-        &format!(r#"{{"groups":{groups}}}"#),
-    );
+    let files = compile_ok("Many", &format!(r#"{{"groups":{groups}}}"#));
     assert_three_file_output(&files, "Many");
 }
 

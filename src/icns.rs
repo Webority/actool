@@ -73,7 +73,7 @@ fn make_argb(img_path: &Path, pixel_size: u32) -> anyhow::Result<Vec<u8>> {
     let mut r = Vec::with_capacity(len);
     let mut g = Vec::with_capacity(len);
     let mut b = Vec::with_capacity(len);
-    for chunk in pixels.chunks_exact(4) {
+    for chunk in pixels.as_chunks::<4>().0 {
         r.push(chunk[0]);
         g.push(chunk[1]);
         b.push(chunk[2]);
@@ -137,7 +137,6 @@ fn encode_rgba_png(
     h: u32,
     exif: &[u8],
 ) -> anyhow::Result<Vec<u8>> {
-
     let mut out = Vec::new();
     {
         let mut encoder = png::Encoder::new(&mut out, w, h);
@@ -161,8 +160,7 @@ pub fn create_icns<P: AsRef<Path>>(
     // the bundle only ships @2x sized renditions.
     let mut exact: std::collections::HashMap<(u32, u32), &PathBuf> =
         std::collections::HashMap::new();
-    let mut by_point: std::collections::HashMap<u32, &PathBuf> =
-        std::collections::HashMap::new();
+    let mut by_point: std::collections::HashMap<u32, &PathBuf> = std::collections::HashMap::new();
     for (path, pixel_size, scale) in icon_images {
         let point = pixel_size / scale;
         exact.insert((point, *scale), path);

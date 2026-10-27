@@ -13,13 +13,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const ICON_DIM2_POINTS: &[(u32, u16)] = &[
-    (16, 1),
-    (32, 2),
-    (128, 3),
-    (256, 4),
-    (512, 5),
-];
+const ICON_DIM2_POINTS: &[(u32, u16)] = &[(16, 1), (32, 2), (128, 3), (256, 4), (512, 5)];
 
 fn icon_dim2(point_w: u32) -> u16 {
     ICON_DIM2_POINTS
@@ -48,7 +42,7 @@ fn ios_icon_dim2(point_w: u32) -> u16 {
 }
 
 fn premultiply_bgra(mut buf: Vec<u8>) -> Vec<u8> {
-    for chunk in buf.chunks_exact_mut(4) {
+    for chunk in buf.as_chunks_mut::<4>().0 {
         let a = chunk[3];
         if a == 255 {
             continue;
@@ -67,7 +61,7 @@ fn premultiply_bgra(mut buf: Vec<u8>) -> Vec<u8> {
 }
 
 fn premultiply_ga8(mut buf: Vec<u8>) -> Vec<u8> {
-    for chunk in buf.chunks_exact_mut(2) {
+    for chunk in buf.as_chunks_mut::<2>().0 {
         let a = chunk[1];
         if a == 255 {
             continue;
@@ -89,11 +83,13 @@ pub fn bgra_to_best_format(
 ) -> (Vec<u8>, u32, u32, [u8; 4]) {
     if !force_bgra {
         let is_gray = bgra_data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .all(|c| c[0] == c[1] && c[1] == c[2]);
         if is_gray {
             let mut ga = Vec::with_capacity((width * height * 2) as usize);
-            for chunk in bgra_data.chunks_exact(4) {
+            for chunk in bgra_data.as_chunks::<4>().0 {
                 ga.push(chunk[0]);
                 ga.push(chunk[3]);
             }
@@ -111,7 +107,7 @@ pub fn bgra_to_best_format(
 /// when to use this based on the icon-level fill-specializations flag.
 pub fn bgra_to_ga8_force(bgra: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bgra.len() / 2);
-    for px in bgra.chunks_exact(4) {
+    for px in bgra.as_chunks::<4>().0 {
         // Pixels are premultiplied BGRA; the luma channel inherits the
         // same alpha by virtue of being derived from the BGR components.
         let b = px[0] as u32;
@@ -131,7 +127,7 @@ pub fn bgra_to_ga8_force(bgra: &[u8]) -> Vec<u8> {
 /// match — Apple uses the same convention for `61AG` (GA16) atlases.
 pub fn bgra_to_ga16_force(bgra: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bgra.len());
-    for px in bgra.chunks_exact(4) {
+    for px in bgra.as_chunks::<4>().0 {
         let b = px[0] as u32;
         let g = px[1] as u32;
         let r = px[2] as u32;
@@ -145,10 +141,7 @@ pub fn bgra_to_ga16_force(bgra: &[u8]) -> Vec<u8> {
     out
 }
 
-pub fn load_image_as_bgra(
-    path: &Path,
-    force_bgra: bool,
-) -> Result<(Vec<u8>, u32, u32, [u8; 4])> {
+pub fn load_image_as_bgra(path: &Path, force_bgra: bool) -> Result<(Vec<u8>, u32, u32, [u8; 4])> {
     let img = image::open(path)?;
     let w = img.width();
     let h = img.height();
@@ -171,11 +164,13 @@ pub fn load_image_as_bgra(
             let raw = rgba.as_raw();
             if !force_bgra {
                 let is_gray = raw
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .all(|c| c[0] == c[1] && c[1] == c[2]);
                 if is_gray {
                     let mut ga = Vec::with_capacity((w * h * 2) as usize);
-                    for c in raw.chunks_exact(4) {
+                    for c in raw.as_chunks::<4>().0 {
                         ga.push(c[0]);
                         ga.push(c[3]);
                     }
@@ -183,7 +178,7 @@ pub fn load_image_as_bgra(
                 }
             }
             let mut bgra = Vec::with_capacity(raw.len());
-            for c in raw.chunks_exact(4) {
+            for c in raw.as_chunks::<4>().0 {
                 bgra.push(c[2]);
                 bgra.push(c[1]);
                 bgra.push(c[0]);
@@ -196,7 +191,7 @@ pub fn load_image_as_bgra(
             let rgba = img.to_rgba8();
             let raw = rgba.as_raw();
             let mut bgra = Vec::with_capacity(raw.len());
-            for c in raw.chunks_exact(4) {
+            for c in raw.as_chunks::<4>().0 {
                 bgra.push(c[2]);
                 bgra.push(c[1]);
                 bgra.push(c[0]);
@@ -211,9 +206,12 @@ fn parse_color_component(value: &str) -> f64 {
     if value.starts_with("0x") || value.starts_with("0X") {
         return i64::from_str_radix(&value[2..], 16).unwrap_or(0) as f64 / 255.0;
     }
-    if value.chars().all(|c| c.is_ascii_digit() || c == '+' || c == '-') {
+    if value
+        .chars()
+        .all(|c| c.is_ascii_digit() || c == '+' || c == '-')
+    {
         let i: i64 = value.parse().unwrap_or(0);
-        if i > 1 || i < 0 {
+        if !(0..=1).contains(&i) {
             return i as f64 / 255.0;
         }
         return i as f64;
@@ -459,8 +457,7 @@ impl AssetCatalog {
                                 .and_then(|x| x.as_bool())
                                 .unwrap_or(false)
                             {
-                                let name =
-                                    item.file_name().unwrap_or_default().to_string_lossy();
+                                let name = item.file_name().unwrap_or_default().to_string_lossy();
                                 child_ns = if namespace.is_empty() {
                                     format!("{name}/")
                                 } else {
@@ -484,7 +481,11 @@ impl AssetCatalog {
         facets: &mut IndexMap<String, Facet>,
         namespace: &str,
     ) -> Result<()> {
-        let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let facet_name = format!("{namespace}{name}");
         let ident = self.get_identifier(&facet_name);
         let count_before = renditions.len();
@@ -581,8 +582,7 @@ impl AssetCatalog {
                 // compact, normalized rewrite — iina's 167 KB design PDFs come
                 // back ~3.8 KB), not the raw source. Fall back to the raw bytes
                 // when CoreGraphics is unavailable.
-                let pdf_data =
-                    crate::pdf_raster::normalize_pdf(&raw_pdf).unwrap_or(raw_pdf);
+                let pdf_data = crate::pdf_raster::normalize_pdf(&raw_pdf).unwrap_or(raw_pdf);
                 let csi = car::build_pdf_csi(filename, &pdf_data);
                 let mut rend = Rendition {
                     name: filename.to_string(),
@@ -786,7 +786,11 @@ impl AssetCatalog {
         renditions: &mut Vec<Rendition>,
         facets: &mut IndexMap<String, Facet>,
     ) -> Result<()> {
-        let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         if !self.wants_app_icon_set(&name) {
             return Ok(());
         }
@@ -922,7 +926,10 @@ impl AssetCatalog {
             let (pixel_data, width, height, pixel_format) =
                 load_image_as_bgra(&img_path, self.force_bgra)?;
             let (dim2, idioms) = if single_size {
-                (1, vec![car::idiom_value("iphone"), car::idiom_value("ipad")])
+                (
+                    1,
+                    vec![car::idiom_value("iphone"), car::idiom_value("ipad")],
+                )
             } else {
                 (self.icon_size_index(point_w), vec![idiom_num])
             };
@@ -1032,7 +1039,11 @@ impl AssetCatalog {
         facets: &mut IndexMap<String, Facet>,
         namespace: &str,
     ) -> Result<()> {
-        let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let facet_name = format!("{namespace}{name}");
         let ident = self.get_identifier(&facet_name);
         let re = regex::Regex::new(r"^icon_(\d+)x(\d+)(?:@(\d+)x)?\.png$")?;
@@ -1125,7 +1136,11 @@ impl AssetCatalog {
         facets: &mut IndexMap<String, Facet>,
         namespace: &str,
     ) -> Result<()> {
-        let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let facet_name = format!("{namespace}{name}");
         let ident = self.get_identifier(&facet_name);
         let contents_path = item.join("Contents.json");
@@ -1142,16 +1157,28 @@ impl AssetCatalog {
                     continue;
                 }
                 let r = parse_color_component(
-                    components.get("red").and_then(|v| v.as_str()).unwrap_or("0"),
+                    components
+                        .get("red")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0"),
                 );
                 let g = parse_color_component(
-                    components.get("green").and_then(|v| v.as_str()).unwrap_or("0"),
+                    components
+                        .get("green")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0"),
                 );
                 let b = parse_color_component(
-                    components.get("blue").and_then(|v| v.as_str()).unwrap_or("0"),
+                    components
+                        .get("blue")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0"),
                 );
                 let a = parse_color_component(
-                    components.get("alpha").and_then(|v| v.as_str()).unwrap_or("1"),
+                    components
+                        .get("alpha")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("1"),
                 );
                 let cs_name = color
                     .get("color-space")
@@ -1200,7 +1227,11 @@ impl AssetCatalog {
         facets: &mut IndexMap<String, Facet>,
         namespace: &str,
     ) -> Result<()> {
-        let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let facet_name = format!("{namespace}{name}");
         let ident = self.get_identifier(&facet_name);
         let contents_path = item.join("Contents.json");
@@ -1252,7 +1283,11 @@ impl AssetCatalog {
         renditions: &mut Vec<Rendition>,
         facets: &mut IndexMap<String, Facet>,
     ) -> Result<()> {
-        let atlas_name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let atlas_name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let atlas_ident = self.get_identifier(&atlas_name);
         facets.insert(
             atlas_name.clone(),
@@ -1271,8 +1306,11 @@ impl AssetCatalog {
             if sprite_item.extension().and_then(|s| s.to_str()) != Some("imageset") {
                 continue;
             }
-            let sprite_name =
-                sprite_item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+            let sprite_name = sprite_item
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
             let full = format!("{atlas_name}/{sprite_name}");
             let sprite_ident = self.get_identifier(&full);
             let contents_path = sprite_item.join("Contents.json");
@@ -1282,8 +1320,7 @@ impl AssetCatalog {
             let contents = read_json(&contents_path)?;
             if let Some(arr) = contents.get("images").and_then(|v| v.as_array()) {
                 for img_info in arr {
-                    let Some(filename) = img_info.get("filename").and_then(|v| v.as_str())
-                    else {
+                    let Some(filename) = img_info.get("filename").and_then(|v| v.as_str()) else {
                         continue;
                     };
                     let img_path = sprite_item.join(filename);
@@ -1329,7 +1366,11 @@ impl AssetCatalog {
         renditions: &mut Vec<Rendition>,
         facets: &mut IndexMap<String, Facet>,
     ) -> Result<()> {
-        let stack_name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let stack_name = item
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let contents_path = item.join("Contents.json");
         if !contents_path.exists() {
             return Ok(());
@@ -1337,9 +1378,7 @@ impl AssetCatalog {
         let contents = read_json(&contents_path)?;
         if let Some(layers) = contents.get("layers").and_then(|v| v.as_array()) {
             for layer in layers {
-                let Some(layer_filename) =
-                    layer.get("filename").and_then(|v| v.as_str())
-                else {
+                let Some(layer_filename) = layer.get("filename").and_then(|v| v.as_str()) else {
                     continue;
                 };
                 let layer_path = item.join(layer_filename);
@@ -1362,11 +1401,9 @@ impl AssetCatalog {
                     continue;
                 }
                 let img_contents = read_json(&img_contents_path)?;
-                if let Some(arr) = img_contents.get("images").and_then(|v| v.as_array())
-                {
+                if let Some(arr) = img_contents.get("images").and_then(|v| v.as_array()) {
                     for img_info in arr {
-                        let Some(filename) =
-                            img_info.get("filename").and_then(|v| v.as_str())
+                        let Some(filename) = img_info.get("filename").and_then(|v| v.as_str())
                         else {
                             continue;
                         };
@@ -1379,10 +1416,7 @@ impl AssetCatalog {
                             .get("idiom")
                             .and_then(|v| v.as_str())
                             .unwrap_or("universal");
-                        if self.platform == "macosx"
-                            && idiom != "mac"
-                            && idiom != "universal"
-                        {
+                        if self.platform == "macosx" && idiom != "mac" && idiom != "universal" {
                             continue;
                         }
                         let (pd, w, h, pf) = load_image_as_bgra(&p, false)?;
@@ -1450,8 +1484,7 @@ impl AssetCatalog {
         let mut result = Vec::new();
         if let Some(arr) = contents.get("images").and_then(|v| v.as_array()) {
             for img_info in arr {
-                let Some(filename) = img_info.get("filename").and_then(|v| v.as_str())
-                else {
+                let Some(filename) = img_info.get("filename").and_then(|v| v.as_str()) else {
                     continue;
                 };
                 let path = icon_dir.join(filename);
@@ -1459,7 +1492,10 @@ impl AssetCatalog {
                     continue;
                 }
                 if !image_platform_applies(
-                    img_info.get("platform").and_then(|v| v.as_str()).unwrap_or(""),
+                    img_info
+                        .get("platform")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(""),
                     &self.platform,
                 ) {
                     continue;
@@ -1517,8 +1553,7 @@ impl AssetCatalog {
         let mut result = Vec::new();
         if let Some(arr) = contents.get("images").and_then(|v| v.as_array()) {
             for img_info in arr {
-                let Some(filename) = img_info.get("filename").and_then(|v| v.as_str())
-                else {
+                let Some(filename) = img_info.get("filename").and_then(|v| v.as_str()) else {
                     continue;
                 };
                 if filename.to_ascii_lowercase().ends_with(".svg") {
@@ -1602,6 +1637,28 @@ fn read_json(path: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&raw)?)
 }
 
+/// Names of every `.appiconset` under `dir`, recursing into folders as the parser does.
+fn collect_appiconsets(dir: &Path, out: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.filter_map(|entry| entry.ok()) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        match path.extension().and_then(|ext| ext.to_str()) {
+            Some("appiconset") => {
+                if let Some(stem) = path.file_stem() {
+                    out.push(stem.to_string_lossy().to_string());
+                }
+            }
+            Some(_) => {}
+            None => collect_appiconsets(&path, out),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1656,27 +1713,5 @@ mod tests {
         let data = vec![0xFF, 0x00, 0x00, 0xFF];
         let (_, _, _, fmt) = bgra_to_best_format(data, 1, 1, false);
         assert_eq!(&fmt, b"BGRA");
-    }
-}
-
-/// Names of every `.appiconset` under `dir`, recursing into folders as the parser does.
-fn collect_appiconsets(dir: &Path, out: &mut Vec<String>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.filter_map(|entry| entry.ok()) {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("appiconset") => {
-                if let Some(stem) = path.file_stem() {
-                    out.push(stem.to_string_lossy().to_string());
-                }
-            }
-            Some(_) => {}
-            None => collect_appiconsets(&path, out),
-        }
     }
 }

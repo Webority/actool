@@ -13,8 +13,7 @@ fn matches_frozen_snapshot() {
         (b"key2".to_vec(), b"valB".to_vec()),
     ];
     bom.add_tree("TESTTREE", &entries, 4096);
-    let raw: Vec<(u32, Vec<u8>)> =
-        vec![(1, b"aaaa".to_vec()), (2, b"bbbb".to_vec())];
+    let raw: Vec<(u32, Vec<u8>)> = vec![(1, b"aaaa".to_vec()), (2, b"bbbb".to_vec())];
     bom.add_raw_key_tree("RTBL", &raw, 1024);
     let ours = bom.to_bytes();
 

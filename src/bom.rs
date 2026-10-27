@@ -62,15 +62,13 @@ impl BomWriter {
             node.extend_from_slice(&0u32.to_be_bytes());
             node.resize(block_size as usize, 0);
             let node_idx = self.add_block(node);
-            let tree_hdr =
-                build_tree_header(node_idx, block_size, 0, 0, self.tree_key_size());
+            let tree_hdr = build_tree_header(node_idx, block_size, 0, 0, self.tree_key_size());
             let tree_idx = self.add_block(tree_hdr);
             self.named_blocks.insert(name.to_string(), tree_idx);
             return tree_idx;
         }
 
-        let leaf_batches: Vec<&[(Vec<u8>, Vec<u8>)]> =
-            entries.chunks(max_per_node).collect();
+        let leaf_batches: Vec<&[(Vec<u8>, Vec<u8>)]> = entries.chunks(max_per_node).collect();
 
         if leaf_batches.len() == 1 {
             let node = self.build_leaf_node(leaf_batches[0], 0, 0, block_size);
@@ -204,8 +202,7 @@ impl BomWriter {
         }
 
         let max_per_node = ((block_size as usize) - 12) / 8;
-        let batches: Vec<&[(u32, Vec<u8>)]> =
-            entries.chunks(max_per_node).collect();
+        let batches: Vec<&[(u32, Vec<u8>)]> = entries.chunks(max_per_node).collect();
 
         if batches.len() == 1 {
             let mut node = Vec::new();
@@ -222,15 +219,13 @@ impl BomWriter {
                 node.resize(block_size as usize, 0);
             }
             let node_idx = self.add_block(node);
-            let tree_hdr =
-                build_tree_header(node_idx, block_size, entries.len() as u32, 1, 0);
+            let tree_hdr = build_tree_header(node_idx, block_size, entries.len() as u32, 1, 0);
             let tree_idx = self.add_block(tree_hdr);
             self.named_blocks.insert(name.to_string(), tree_idx);
             return tree_idx;
         }
 
-        let leaf_indices: Vec<usize> =
-            batches.iter().map(|_| self.add_block(vec![0])).collect();
+        let leaf_indices: Vec<usize> = batches.iter().map(|_| self.add_block(vec![0])).collect();
 
         for (i, batch) in batches.iter().enumerate() {
             let fwd = if i + 1 < leaf_indices.len() {
@@ -267,8 +262,7 @@ impl BomWriter {
             internal.extend_from_slice(&(leaf_indices[i] as u32).to_be_bytes());
         }
         let internal_idx = self.add_block(internal);
-        let tree_hdr =
-            build_tree_header(internal_idx, block_size, entries.len() as u32, 1, 0);
+        let tree_hdr = build_tree_header(internal_idx, block_size, entries.len() as u32, 1, 0);
         let tree_idx = self.add_block(tree_hdr);
         self.named_blocks.insert(name.to_string(), tree_idx);
         tree_idx
@@ -293,11 +287,10 @@ impl BomWriter {
                 block_entries.push((0, 0));
                 continue;
             }
-            if current_offset % 16 != 0 {
+            if !current_offset.is_multiple_of(16) {
                 current_offset += 16 - (current_offset % 16);
             }
-            block_entries
-                .push((current_offset as u32, block_data.len() as u32));
+            block_entries.push((current_offset as u32, block_data.len() as u32));
             current_offset += block_data.len() as u64;
         }
         while block_entries.len() < MIN_TABLE_SIZE {
@@ -310,7 +303,7 @@ impl BomWriter {
             index_data.extend_from_slice(&(*off).to_be_bytes());
             index_data.extend_from_slice(&(*len).to_be_bytes());
         }
-        index_data.extend(std::iter::repeat(0u8).take(FREELIST_SIZE));
+        index_data.extend(std::iter::repeat_n(0u8, FREELIST_SIZE));
 
         let mut vars_data = Vec::new();
         vars_data.extend_from_slice(&(self.named_blocks.len() as u32).to_be_bytes());
@@ -321,14 +314,14 @@ impl BomWriter {
             vars_data.extend_from_slice(name_bytes);
         }
 
-        if current_offset % 16 != 0 {
+        if !current_offset.is_multiple_of(16) {
             current_offset += 16 - (current_offset % 16);
         }
         let vars_offset = current_offset;
         let vars_length = vars_data.len() as u32;
         current_offset += vars_length as u64;
 
-        if current_offset % 16 != 0 {
+        if !current_offset.is_multiple_of(16) {
             current_offset += 16 - (current_offset % 16);
         }
         let index_offset = current_offset;
@@ -445,8 +438,7 @@ mod tests {
     #[test]
     fn raw_key_tree() {
         let mut bom = BomWriter::new();
-        let entries: Vec<(u32, Vec<u8>)> =
-            vec![(1, b"aaaa".to_vec()), (2, b"bbbb".to_vec())];
+        let entries: Vec<(u32, Vec<u8>)> = vec![(1, b"aaaa".to_vec()), (2, b"bbbb".to_vec())];
         bom.add_raw_key_tree("TBL", &entries, 1024);
         let data = bom.to_bytes();
         assert!(data.windows(4).any(|w| w == b"aaaa"));

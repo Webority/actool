@@ -238,10 +238,7 @@ fn ios_appicon_emits_loose_primary_pngs() {
 #[test]
 fn ios_appicon_partial_plist_has_cfbundleicons() {
     let root = workspace_tmp("ios_appicon_plist");
-    build_appicon_catalog(
-        &root,
-        &[("60x60", "2x", "iphone"), ("76x76", "2x", "ipad")],
-    );
+    build_appicon_catalog(&root, &[("60x60", "2x", "iphone"), ("76x76", "2x", "ipad")]);
     let out = root.join("out");
     std::fs::create_dir_all(&out).unwrap();
     compile_ios_icon(&root.join("A.xcassets"), &out);
@@ -261,7 +258,10 @@ fn ios_appicon_partial_plist_has_cfbundleicons() {
 fn ios_appicon_ipad_files_only_with_ipad_icons() {
     // iPhone-only set: CFBundleIcons~ipad carries just the name (no files).
     let root = workspace_tmp("ios_appicon_iphone_only");
-    build_appicon_catalog(&root, &[("60x60", "2x", "iphone"), ("60x60", "3x", "iphone")]);
+    build_appicon_catalog(
+        &root,
+        &[("60x60", "2x", "iphone"), ("60x60", "3x", "iphone")],
+    );
     let out = root.join("out");
     std::fs::create_dir_all(&out).unwrap();
     compile_ios_icon(&root.join("A.xcassets"), &out);
@@ -494,7 +494,10 @@ fn ios_appicon_no_subtype_without_60pt_at_3x() {
     // No 60pt@3x -> no Plus-phone synthesis.
     build_appicon_catalog(
         &root,
-        &[("60x60", "2x", "iphone"), ("1024x1024", "1x", "ios-marketing")],
+        &[
+            ("60x60", "2x", "iphone"),
+            ("1024x1024", "1x", "ios-marketing"),
+        ],
     );
     let out = root.join("out");
     std::fs::create_dir_all(&out).unwrap();

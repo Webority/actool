@@ -9,7 +9,10 @@ const BUNDLE_VERSION: &str = "24506";
 const SHORT_BUNDLE_VERSION: &str = "26.3";
 
 #[derive(Parser, Debug)]
-#[command(name = "actool", about = "Compiles, prints, updates, and verifies asset catalogs.")]
+#[command(
+    name = "actool",
+    about = "Compiles, prints, updates, and verifies asset catalogs."
+)]
 struct Cli {
     /// Path to .xcassets document
     document: Option<PathBuf>,
@@ -143,33 +146,27 @@ fn main() -> ExitCode {
 
     // --generate-objc-asset-symbols with --bundle-identifier replaces normal
     // compilation: only the header (and optional index) is produced.
-    if let (Some(header_path), Some(bundle_id)) =
-        (cli.generate_objc_asset_symbols.as_ref(), cli.bundle_identifier.as_ref())
-    {
-        if let Err(e) = symbols::generate_symbols_header(
-            &document,
-            header_path,
-            bundle_id,
-            &cli.platform,
-        ) {
+    if let (Some(header_path), Some(bundle_id)) = (
+        cli.generate_objc_asset_symbols.as_ref(),
+        cli.bundle_identifier.as_ref(),
+    ) {
+        if let Err(e) =
+            symbols::generate_symbols_header(&document, header_path, bundle_id, &cli.platform)
+        {
             eprintln!("error generating header: {e}");
             return ExitCode::from(1);
         }
         let mut output_files: Vec<PathBuf> = Vec::new();
         if let Some(index_path) = cli.generate_asset_symbol_index.as_ref() {
-            if let Err(e) =
-                symbols::generate_symbol_index(&document, index_path, &cli.platform)
-            {
+            if let Err(e) = symbols::generate_symbol_index(&document, index_path, &cli.platform) {
                 eprintln!("error generating index: {e}");
                 return ExitCode::from(1);
             }
-            output_files.push(
-                std::fs::canonicalize(index_path).unwrap_or_else(|_| index_path.clone()),
-            );
+            output_files
+                .push(std::fs::canonicalize(index_path).unwrap_or_else(|_| index_path.clone()));
         }
-        output_files.push(
-            std::fs::canonicalize(header_path).unwrap_or_else(|_| header_path.clone()),
-        );
+        output_files
+            .push(std::fs::canonicalize(header_path).unwrap_or_else(|_| header_path.clone()));
         if let Some(dep) = cli.export_dependency_info.as_ref() {
             if let Err(e) = write_dependency_info(dep, &document, &output_files) {
                 eprintln!("error writing deps: {e}");
@@ -181,8 +178,12 @@ fn main() -> ExitCode {
     }
 
     let include_languages: Option<Vec<String>> = {
-        let v: Vec<String> =
-            cli.include_language.iter().filter(|s| !s.is_empty()).cloned().collect();
+        let v: Vec<String> = cli
+            .include_language
+            .iter()
+            .filter(|s| !s.is_empty())
+            .cloned()
+            .collect();
         if v.is_empty() {
             None
         } else {
@@ -190,7 +191,9 @@ fn main() -> ExitCode {
         }
     };
     let plist_l10n = !matches!(
-        cli.include_partial_info_plist_localizations.to_ascii_uppercase().as_str(),
+        cli.include_partial_info_plist_localizations
+            .to_ascii_uppercase()
+            .as_str(),
         "NO"
     );
 
@@ -327,8 +330,8 @@ fn write_dependency_info(
     out.push(0x00);
     out.extend_from_slice(format!("actool-{BUNDLE_VERSION}").as_bytes());
     out.push(0x00);
-    let abs_input = std::fs::canonicalize(xcassets_path)
-        .unwrap_or_else(|_| xcassets_path.to_path_buf());
+    let abs_input =
+        std::fs::canonicalize(xcassets_path).unwrap_or_else(|_| xcassets_path.to_path_buf());
     out.push(0x10);
     out.extend_from_slice(abs_input.to_string_lossy().as_bytes());
     out.push(0x00);
