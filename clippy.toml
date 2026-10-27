@@ -1,0 +1,5 @@
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+disallowed-methods = [
+    { path = "std::fs::canonicalize", reason = "use dunce::canonicalize: std returns verbatim UNC paths on Windows that native tools refuse (rust.md)" },
+]

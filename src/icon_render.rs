@@ -13,7 +13,6 @@
 //! glass/specular/shadow treatments Apple applies on top are only partly
 //! reproduced (no public algorithm); the gradient-squircle background is.
 
-use std::ffi::CString;
 use std::os::raw::{c_char, c_double, c_void};
 use std::sync::OnceLock;
 
@@ -111,9 +110,7 @@ fn syms() -> Option<&'static Syms> {
     static CELL: OnceLock<Option<Syms>> = OnceLock::new();
     CELL.get_or_init(|| unsafe {
         let cg = dlopen(
-            CString::new("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
-                .unwrap()
-                .as_ptr(),
+            c"/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics".as_ptr(),
             0x1,
         );
         if cg.is_null() {
@@ -121,8 +118,7 @@ fn syms() -> Option<&'static Syms> {
         }
         macro_rules! sym {
             ($name:expr, $ty:ty) => {{
-                let n = CString::new($name).unwrap();
-                let p = dlsym(cg, n.as_ptr());
+                let p = dlsym(cg, $name.as_ptr());
                 if p.is_null() {
                     return None;
                 }
@@ -130,33 +126,33 @@ fn syms() -> Option<&'static Syms> {
             }};
         }
         Some(Syms {
-            device_rgb: sym!("CGColorSpaceCreateDeviceRGB", FnDeviceRgb),
-            bitmap_create: sym!("CGBitmapContextCreate", FnBitmapCreate),
-            bitmap_data: sym!("CGBitmapContextGetData", FnBitmapData),
-            path_create_mutable: sym!("CGPathCreateMutable", FnPathCreateMutable),
-            path_move: sym!("CGPathMoveToPoint", FnPathAddPoint),
-            path_line: sym!("CGPathAddLineToPoint", FnPathAddPoint),
-            path_close: sym!("CGPathCloseSubpath", FnRelease),
-            ctx_add_path: sym!("CGContextAddPath", FnCtxPath),
-            ctx_clip: sym!("CGContextClip", FnCtx),
-            ctx_save: sym!("CGContextSaveGState", FnCtx),
-            ctx_restore: sym!("CGContextRestoreGState", FnCtx),
-            ctx_fill_path: sym!("CGContextFillPath", FnCtx),
-            grad_create: sym!("CGGradientCreateWithColorComponents", FnGradCreate),
-            draw_linear: sym!("CGContextDrawLinearGradient", FnDrawLinear),
-            provider_create: sym!("CGDataProviderCreateWithData", FnProviderCreate),
-            image_create: sym!("CGImageCreate", FnImageCreate),
-            draw_image: sym!("CGContextDrawImage", FnDrawImage),
-            color_create: sym!("CGColorCreate", FnColorCreate),
-            set_shadow: sym!("CGContextSetShadowWithColor", FnSetShadow),
-            set_rgb_fill: sym!("CGContextSetRGBFillColor", FnSetRgbFill),
-            path_release: sym!("CGPathRelease", FnRelease),
-            grad_release: sym!("CGGradientRelease", FnRelease),
-            provider_release: sym!("CGDataProviderRelease", FnRelease),
-            image_release: sym!("CGImageRelease", FnRelease),
-            color_release: sym!("CGColorRelease", FnRelease),
-            ctx_release: sym!("CGContextRelease", FnRelease),
-            cs_release: sym!("CGColorSpaceRelease", FnRelease),
+            device_rgb: sym!(c"CGColorSpaceCreateDeviceRGB", FnDeviceRgb),
+            bitmap_create: sym!(c"CGBitmapContextCreate", FnBitmapCreate),
+            bitmap_data: sym!(c"CGBitmapContextGetData", FnBitmapData),
+            path_create_mutable: sym!(c"CGPathCreateMutable", FnPathCreateMutable),
+            path_move: sym!(c"CGPathMoveToPoint", FnPathAddPoint),
+            path_line: sym!(c"CGPathAddLineToPoint", FnPathAddPoint),
+            path_close: sym!(c"CGPathCloseSubpath", FnRelease),
+            ctx_add_path: sym!(c"CGContextAddPath", FnCtxPath),
+            ctx_clip: sym!(c"CGContextClip", FnCtx),
+            ctx_save: sym!(c"CGContextSaveGState", FnCtx),
+            ctx_restore: sym!(c"CGContextRestoreGState", FnCtx),
+            ctx_fill_path: sym!(c"CGContextFillPath", FnCtx),
+            grad_create: sym!(c"CGGradientCreateWithColorComponents", FnGradCreate),
+            draw_linear: sym!(c"CGContextDrawLinearGradient", FnDrawLinear),
+            provider_create: sym!(c"CGDataProviderCreateWithData", FnProviderCreate),
+            image_create: sym!(c"CGImageCreate", FnImageCreate),
+            draw_image: sym!(c"CGContextDrawImage", FnDrawImage),
+            color_create: sym!(c"CGColorCreate", FnColorCreate),
+            set_shadow: sym!(c"CGContextSetShadowWithColor", FnSetShadow),
+            set_rgb_fill: sym!(c"CGContextSetRGBFillColor", FnSetRgbFill),
+            path_release: sym!(c"CGPathRelease", FnRelease),
+            grad_release: sym!(c"CGGradientRelease", FnRelease),
+            provider_release: sym!(c"CGDataProviderRelease", FnRelease),
+            image_release: sym!(c"CGImageRelease", FnRelease),
+            color_release: sym!(c"CGColorRelease", FnRelease),
+            ctx_release: sym!(c"CGContextRelease", FnRelease),
+            cs_release: sym!(c"CGColorSpaceRelease", FnRelease),
         })
     })
     .as_ref()

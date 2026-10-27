@@ -5,7 +5,6 @@ use crate::car::{self, MultisizeImageEntry, Rendition};
 use crate::catalog::load_image_as_bgra;
 use crate::icon_json::{Fill, IconJson};
 use crate::name_hash::hash_name;
-use byteorder::LittleEndian;
 
 static TMP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 use anyhow::Result;
@@ -222,7 +221,7 @@ pub fn compile_icon_bundle(
     let mut icon_images: Vec<(PathBuf, u32, u32)> = Vec::new();
     if primary_is_svg {
         let svg_data = fs::read(primary_source)?;
-        let (sw, sh) = crate::svg_raster::parse_svg_dimensions(&svg_data);
+        let (sw, sh) = crate::svg_raster::parse_svg_dimensions(&svg_data)?;
         if sw == 0 || sh == 0 {
             anyhow::bail!(
                 "could not determine intrinsic size of {}",
@@ -721,9 +720,10 @@ fn rasterize_layer(path: &Path, w: u32, h: u32) -> Result<Vec<u8>> {
 fn layer_native_size(path: &Path) -> (u32, u32) {
     if is_svg_path(path) {
         if let Ok(svg) = fs::read(path) {
-            let (w, h) = crate::svg_raster::parse_svg_dimensions(&svg);
-            if w > 0 && h > 0 {
-                return (w, h);
+            if let Ok((w, h)) = crate::svg_raster::parse_svg_dimensions(&svg) {
+                if w > 0 && h > 0 {
+                    return (w, h);
+                }
             }
         }
         (1024, 1024)
@@ -2470,7 +2470,7 @@ fn write_icon_car(
         car::make_extended_metadata(platform, min_deploy),
     );
 
-    let bitmap_entries = build_bitmapkeys(all_entries, keyformat);
+    let bitmap_entries = build_bitmapkeys(all_entries, keyformat)?;
     bom.add_raw_key_tree("BITMAPKEYS", &bitmap_entries, 1024);
     bom.write(car_path)?;
     Ok(())
@@ -2486,8 +2486,7 @@ fn write_icon_car(
 fn build_bitmapkeys(
     entries: &[(Vec<u8>, Vec<u8>)],
     keyformat: &[u16],
-) -> Vec<(u32, Vec<u8>)> {
-    use byteorder::WriteBytesExt;
+) -> Result<Vec<(u32, Vec<u8>)>> {
     use std::collections::BTreeMap;
     let identifier_pos = keyformat.iter().position(|&a| a == 17);
     let mut per_ident: BTreeMap<u16, Vec<Vec<u16>>> = BTreeMap::new();
@@ -2512,19 +2511,22 @@ fn build_bitmapkeys(
         // 4 bytes for the attr count + 4 bytes per attribute mask.
         let body_size = 4 + 4 * keyformat.len() as u32;
         let mut buf = Vec::with_capacity(16 + body_size as usize);
-        buf.write_u32::<LittleEndian>(1).unwrap();
-        buf.write_u32::<LittleEndian>(0).unwrap();
-        buf.write_u32::<LittleEndian>(body_size).unwrap();
-        buf.write_u32::<LittleEndian>(keyformat.len() as u32).unwrap();
+        buf.extend_from_slice(&1u32.to_le_bytes());
+        buf.extend_from_slice(&0u32.to_le_bytes());
+        buf.extend_from_slice(&body_size.to_le_bytes());
+        buf.extend_from_slice(&(keyformat.len() as u32).to_le_bytes());
         for &attr in keyformat {
             // Apple always emits -1 for these "variable" attrs even when
             // every rendition in the facet has the same value.
             let always_variable = matches!(attr, 7 | 1 | 2 | 17);
             if always_variable {
-                buf.write_i32::<LittleEndian>(-1).unwrap();
+                buf.extend_from_slice(&(-1i32).to_le_bytes());
                 continue;
             }
-            let attr_pos = keyformat.iter().position(|a| *a == attr).unwrap();
+            let attr_pos = keyformat
+                .iter()
+                .position(|a| *a == attr)
+                .ok_or_else(|| anyhow::anyhow!("keyformat lacks attribute {attr}"))?;
             let mut mask: u32 = 0;
             for row in &rows {
                 let v = row[attr_pos];
@@ -2535,12 +2537,12 @@ fn build_bitmapkeys(
             if mask == 0 {
                 mask = 1;
             }
-            buf.write_u32::<LittleEndian>(mask).unwrap();
+            buf.extend_from_slice(&mask.to_le_bytes());
         }
         out.push((ident as u32, buf));
     }
     out.sort_by_key(|(k, _)| *k);
-    out
+    Ok(out)
 }
 
 #[cfg(test)]

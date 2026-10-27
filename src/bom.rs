@@ -3,10 +3,11 @@
 //! BOM is Apple's container format used for `.car` files and `.pkg`
 //! installers. All structures are big-endian.
 
-use byteorder::{BigEndian, WriteBytesExt};
 use indexmap::IndexMap;
-use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
+
+#[cfg(test)]
+use byteorder::BigEndian;
 
 pub struct BomWriter {
     blocks: Vec<Vec<u8>>,
@@ -55,10 +56,10 @@ impl BomWriter {
 
         if entries.is_empty() {
             let mut node = Vec::with_capacity(block_size as usize);
-            node.write_u16::<BigEndian>(1).unwrap();
-            node.write_u16::<BigEndian>(0).unwrap();
-            node.write_i32::<BigEndian>(0).unwrap();
-            node.write_u32::<BigEndian>(0).unwrap();
+            node.extend_from_slice(&1u16.to_be_bytes());
+            node.extend_from_slice(&0u16.to_be_bytes());
+            node.extend_from_slice(&0i32.to_be_bytes());
+            node.extend_from_slice(&0u32.to_be_bytes());
             node.resize(block_size as usize, 0);
             let node_idx = self.add_block(node);
             let tree_hdr =
@@ -104,22 +105,16 @@ impl BomWriter {
         }
 
         let mut internal = Vec::new();
-        internal.write_u16::<BigEndian>(0).unwrap(); // isLeaf = 0
-        internal
-            .write_u16::<BigEndian>((leaf_indices.len() - 1) as u16)
-            .unwrap();
-        internal.write_u32::<BigEndian>(0).unwrap();
-        internal.write_u32::<BigEndian>(0).unwrap();
-        internal
-            .write_u32::<BigEndian>(leaf_indices[0] as u32)
-            .unwrap();
+        internal.extend_from_slice(&0u16.to_be_bytes()); // isLeaf = 0
+        internal.extend_from_slice(&((leaf_indices.len() - 1) as u16).to_be_bytes());
+        internal.extend_from_slice(&0u32.to_be_bytes());
+        internal.extend_from_slice(&0u32.to_be_bytes());
+        internal.extend_from_slice(&(leaf_indices[0] as u32).to_be_bytes());
         for i in 1..leaf_indices.len() {
             let first_key = leaf_batches[i][0].0.clone();
             let key_idx = self.add_block(first_key);
-            internal.write_u32::<BigEndian>(key_idx as u32).unwrap();
-            internal
-                .write_u32::<BigEndian>(leaf_indices[i] as u32)
-                .unwrap();
+            internal.extend_from_slice(&(key_idx as u32).to_be_bytes());
+            internal.extend_from_slice(&(leaf_indices[i] as u32).to_be_bytes());
         }
         let internal_idx = self.add_block(internal);
         let tree_hdr = build_tree_header(
@@ -149,16 +144,16 @@ impl BomWriter {
         block_size: u32,
     ) -> Vec<u8> {
         let mut node = Vec::new();
-        node.write_u16::<BigEndian>(1).unwrap(); // isLeaf
-        node.write_u16::<BigEndian>(entries.len() as u16).unwrap();
-        node.write_u32::<BigEndian>(forward).unwrap();
-        node.write_u32::<BigEndian>(backward).unwrap();
+        node.extend_from_slice(&1u16.to_be_bytes()); // isLeaf
+        node.extend_from_slice(&(entries.len() as u16).to_be_bytes());
+        node.extend_from_slice(&forward.to_be_bytes());
+        node.extend_from_slice(&backward.to_be_bytes());
         let mut key_blob: Vec<u8> = Vec::new();
         for (key_data, value_data) in entries {
             let val_idx = self.add_block(value_data.clone());
             let key_idx = self.add_block(key_data.clone());
-            node.write_u32::<BigEndian>(val_idx as u32).unwrap();
-            node.write_u32::<BigEndian>(key_idx as u32).unwrap();
+            node.extend_from_slice(&(val_idx as u32).to_be_bytes());
+            node.extend_from_slice(&(key_idx as u32).to_be_bytes());
             if self.inline_key_size.is_some() {
                 key_blob.extend_from_slice(key_data);
             }
@@ -196,10 +191,10 @@ impl BomWriter {
     ) -> usize {
         if entries.is_empty() {
             let mut node = Vec::with_capacity(block_size as usize);
-            node.write_u16::<BigEndian>(1).unwrap();
-            node.write_u16::<BigEndian>(0).unwrap();
-            node.write_u32::<BigEndian>(0).unwrap();
-            node.write_u32::<BigEndian>(0).unwrap();
+            node.extend_from_slice(&1u16.to_be_bytes());
+            node.extend_from_slice(&0u16.to_be_bytes());
+            node.extend_from_slice(&0u32.to_be_bytes());
+            node.extend_from_slice(&0u32.to_be_bytes());
             node.resize(block_size as usize, 0);
             let node_idx = self.add_block(node);
             let tree_hdr = build_tree_header(node_idx, block_size, 0, 1, 0);
@@ -214,14 +209,14 @@ impl BomWriter {
 
         if batches.len() == 1 {
             let mut node = Vec::new();
-            node.write_u16::<BigEndian>(1).unwrap();
-            node.write_u16::<BigEndian>(entries.len() as u16).unwrap();
-            node.write_u32::<BigEndian>(0).unwrap();
-            node.write_u32::<BigEndian>(0).unwrap();
+            node.extend_from_slice(&1u16.to_be_bytes());
+            node.extend_from_slice(&(entries.len() as u16).to_be_bytes());
+            node.extend_from_slice(&0u32.to_be_bytes());
+            node.extend_from_slice(&0u32.to_be_bytes());
             for (raw_key, value_data) in entries {
                 let val_idx = self.add_block(value_data.clone());
-                node.write_u32::<BigEndian>(val_idx as u32).unwrap();
-                node.write_u32::<BigEndian>(*raw_key).unwrap();
+                node.extend_from_slice(&(val_idx as u32).to_be_bytes());
+                node.extend_from_slice(&(*raw_key).to_be_bytes());
             }
             if (node.len() as u32) < block_size {
                 node.resize(block_size as usize, 0);
@@ -245,14 +240,14 @@ impl BomWriter {
             };
             let bwd = if i > 0 { leaf_indices[i - 1] as u32 } else { 0 };
             let mut node = Vec::new();
-            node.write_u16::<BigEndian>(1).unwrap();
-            node.write_u16::<BigEndian>(batch.len() as u16).unwrap();
-            node.write_u32::<BigEndian>(fwd).unwrap();
-            node.write_u32::<BigEndian>(bwd).unwrap();
+            node.extend_from_slice(&1u16.to_be_bytes());
+            node.extend_from_slice(&(batch.len() as u16).to_be_bytes());
+            node.extend_from_slice(&fwd.to_be_bytes());
+            node.extend_from_slice(&bwd.to_be_bytes());
             for (raw_key, value_data) in *batch {
                 let val_idx = self.add_block(value_data.clone());
-                node.write_u32::<BigEndian>(val_idx as u32).unwrap();
-                node.write_u32::<BigEndian>(*raw_key).unwrap();
+                node.extend_from_slice(&(val_idx as u32).to_be_bytes());
+                node.extend_from_slice(&(*raw_key).to_be_bytes());
             }
             if (node.len() as u32) < block_size {
                 node.resize(block_size as usize, 0);
@@ -261,21 +256,15 @@ impl BomWriter {
         }
 
         let mut internal = Vec::new();
-        internal.write_u16::<BigEndian>(0).unwrap();
-        internal
-            .write_u16::<BigEndian>((leaf_indices.len() - 1) as u16)
-            .unwrap();
-        internal.write_u32::<BigEndian>(0).unwrap();
-        internal.write_u32::<BigEndian>(0).unwrap();
-        internal
-            .write_u32::<BigEndian>(leaf_indices[0] as u32)
-            .unwrap();
+        internal.extend_from_slice(&0u16.to_be_bytes());
+        internal.extend_from_slice(&((leaf_indices.len() - 1) as u16).to_be_bytes());
+        internal.extend_from_slice(&0u32.to_be_bytes());
+        internal.extend_from_slice(&0u32.to_be_bytes());
+        internal.extend_from_slice(&(leaf_indices[0] as u32).to_be_bytes());
         for i in 1..leaf_indices.len() {
             let first_key = batches[i][0].0;
-            internal.write_u32::<BigEndian>(first_key).unwrap();
-            internal
-                .write_u32::<BigEndian>(leaf_indices[i] as u32)
-                .unwrap();
+            internal.extend_from_slice(&first_key.to_be_bytes());
+            internal.extend_from_slice(&(leaf_indices[i] as u32).to_be_bytes());
         }
         let internal_idx = self.add_block(internal);
         let tree_hdr =
@@ -316,23 +305,19 @@ impl BomWriter {
         }
 
         let mut index_data = Vec::new();
-        index_data
-            .write_u32::<BigEndian>(block_entries.len() as u32)
-            .unwrap();
+        index_data.extend_from_slice(&(block_entries.len() as u32).to_be_bytes());
         for (off, len) in &block_entries {
-            index_data.write_u32::<BigEndian>(*off).unwrap();
-            index_data.write_u32::<BigEndian>(*len).unwrap();
+            index_data.extend_from_slice(&(*off).to_be_bytes());
+            index_data.extend_from_slice(&(*len).to_be_bytes());
         }
         index_data.extend(std::iter::repeat(0u8).take(FREELIST_SIZE));
 
         let mut vars_data = Vec::new();
-        vars_data
-            .write_u32::<BigEndian>(self.named_blocks.len() as u32)
-            .unwrap();
+        vars_data.extend_from_slice(&(self.named_blocks.len() as u32).to_be_bytes());
         for (name, block_idx) in &self.named_blocks {
             let name_bytes = name.as_bytes();
-            vars_data.write_u32::<BigEndian>(*block_idx as u32).unwrap();
-            vars_data.write_u8(name_bytes.len() as u8).unwrap();
+            vars_data.extend_from_slice(&(*block_idx as u32).to_be_bytes());
+            vars_data.push(name_bytes.len() as u8);
             vars_data.extend_from_slice(name_bytes);
         }
 
@@ -349,44 +334,43 @@ impl BomWriter {
         let index_offset = current_offset;
         let index_length = index_data.len() as u32;
 
-        let mut out = std::io::Cursor::new(Vec::new());
-        out.write_all(b"BOMStore").unwrap();
-        out.write_u32::<BigEndian>(1).unwrap(); // version
-        out.write_u32::<BigEndian>(num_used_blocks).unwrap();
-        out.write_u32::<BigEndian>(index_offset as u32).unwrap();
-        out.write_u32::<BigEndian>(index_length).unwrap();
-        out.write_u32::<BigEndian>(vars_offset as u32).unwrap();
-        out.write_u32::<BigEndian>(vars_length).unwrap();
+        let mut out = Vec::new();
+        out.extend_from_slice(b"BOMStore");
+        out.extend_from_slice(&1u32.to_be_bytes()); // version
+        out.extend_from_slice(&num_used_blocks.to_be_bytes());
+        out.extend_from_slice(&(index_offset as u32).to_be_bytes());
+        out.extend_from_slice(&index_length.to_be_bytes());
+        out.extend_from_slice(&(vars_offset as u32).to_be_bytes());
+        out.extend_from_slice(&vars_length.to_be_bytes());
 
         for (i, block_data) in self.blocks.iter().enumerate() {
             if i == 0 {
                 continue;
             }
             let expected = block_entries[i].0 as u64;
-            let pos = out.position();
+            let pos = out.len() as u64;
             if pos < expected {
                 let pad = (expected - pos) as usize;
-                out.write_all(&vec![0u8; pad]).unwrap();
+                out.resize(out.len() + pad, 0);
             }
-            out.write_all(block_data).unwrap();
+            out.extend_from_slice(block_data);
         }
 
-        let pos = out.position();
+        let pos = out.len() as u64;
         if pos < vars_offset {
             let pad = (vars_offset - pos) as usize;
-            out.write_all(&vec![0u8; pad]).unwrap();
+            out.resize(out.len() + pad, 0);
         }
-        out.write_all(&vars_data).unwrap();
+        out.extend_from_slice(&vars_data);
 
-        let pos = out.position();
+        let pos = out.len() as u64;
         if pos < index_offset {
             let pad = (index_offset - pos) as usize;
-            out.write_all(&vec![0u8; pad]).unwrap();
+            out.resize(out.len() + pad, 0);
         }
-        out.write_all(&index_data).unwrap();
+        out.extend_from_slice(&index_data);
 
-        let _ = out.seek(SeekFrom::Start(0));
-        out.into_inner()
+        out
     }
 }
 
@@ -410,13 +394,13 @@ fn build_tree_header(
     // (FACETKEYS, APPEARANCEKEYS), or 0 for raw-key trees (BITMAPKEYS).
     let mut hdr = Vec::new();
     hdr.extend_from_slice(b"tree");
-    hdr.write_u32::<BigEndian>(1).unwrap();
-    hdr.write_u32::<BigEndian>(root_idx as u32).unwrap();
-    hdr.write_u32::<BigEndian>(block_size).unwrap();
-    hdr.write_u32::<BigEndian>(n_paths).unwrap();
-    hdr.write_u8(flag).unwrap();
-    hdr.write_u32::<BigEndian>(key_size).unwrap();
-    hdr.write_u32::<BigEndian>(0).unwrap();
+    hdr.extend_from_slice(&1u32.to_be_bytes());
+    hdr.extend_from_slice(&(root_idx as u32).to_be_bytes());
+    hdr.extend_from_slice(&block_size.to_be_bytes());
+    hdr.extend_from_slice(&n_paths.to_be_bytes());
+    hdr.push(flag);
+    hdr.extend_from_slice(&key_size.to_be_bytes());
+    hdr.extend_from_slice(&0u32.to_be_bytes());
     hdr
 }
 

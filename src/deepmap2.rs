@@ -4,7 +4,7 @@
 //! Accelerate.framework at runtime. Undocumented Apple API that provides
 //! better compression than plain LZFSE for image data.
 
-use std::ffi::{c_void, CString};
+use std::ffi::c_void;
 use std::os::raw::{c_ulong, c_ushort};
 use std::ptr;
 use std::sync::OnceLock;
@@ -59,15 +59,12 @@ fn pixfmt_to_dm(pixfmt: &[u8]) -> Option<u32> {
 fn encode_fn() -> Option<EncodeFn> {
     static FN: OnceLock<Option<usize>> = OnceLock::new();
     let addr = FN.get_or_init(|| unsafe {
-        let path = CString::new(
-            "/System/Library/Frameworks/Accelerate.framework/Accelerate",
-        )
-        .unwrap();
+        let path = c"/System/Library/Frameworks/Accelerate.framework/Accelerate";
         let handle = dlopen(path.as_ptr(), RTLD_LAZY);
         if handle.is_null() {
             return None;
         }
-        let name = CString::new("vImageDeepmap2EncodeCreateBuffer").unwrap();
+        let name = c"vImageDeepmap2EncodeCreateBuffer";
         let sym = dlsym(handle, name.as_ptr());
         if sym.is_null() {
             None

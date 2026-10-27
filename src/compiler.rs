@@ -9,7 +9,6 @@ use crate::catalog::{AssetCatalog, Facet, IconImage};
 use crate::icns;
 use crate::packer::{self, PackedImage};
 use anyhow::Result;
-use byteorder::{LittleEndian, WriteBytesExt};
 use indexmap::IndexMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -358,21 +357,21 @@ pub fn compile_catalog_with_icons(
         // (UIAppearanceAny=0) even when no asset has a dark variant.
         let mut ap_entries: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
         let mut v_any = Vec::new();
-        v_any.write_u16::<LittleEndian>(0).unwrap();
+        v_any.extend_from_slice(&0u16.to_le_bytes());
         ap_entries.push((b"UIAppearanceAny".to_vec(), v_any));
         if has_appearances {
             let mut v_dark = Vec::new();
-            v_dark.write_u16::<LittleEndian>(1).unwrap();
+            v_dark.extend_from_slice(&1u16.to_le_bytes());
             ap_entries.push((b"UIAppearanceDark".to_vec(), v_dark));
         }
         bom.add_tree("APPEARANCEKEYS", &ap_entries, 4096);
     } else if has_appearances {
         let mut ap_entries: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
         let mut v1 = Vec::new();
-        v1.write_u16::<LittleEndian>(1).unwrap();
+        v1.extend_from_slice(&1u16.to_le_bytes());
         ap_entries.push((b"NSAppearanceNameDarkAqua".to_vec(), v1));
         let mut v0 = Vec::new();
-        v0.write_u16::<LittleEndian>(0).unwrap();
+        v0.extend_from_slice(&0u16.to_le_bytes());
         ap_entries.push((b"NSAppearanceNameSystem".to_vec(), v0));
         bom.add_tree("APPEARANCEKEYS", &ap_entries, 4096);
     }
@@ -482,7 +481,7 @@ fn build_bitmapkeys(
     for (key_data, _csi) in rendition_entries {
         let n_vals = key_data.len() / 2;
         let vals: Vec<u16> = (0..n_vals)
-            .map(|i| u16::from_le_bytes(key_data[i * 2..i * 2 + 2].try_into().unwrap()))
+            .map(|i| u16::from_le_bytes([key_data[i * 2], key_data[i * 2 + 1]]))
             .collect();
         if let Some(p) = id_pos {
             if p < vals.len() {
@@ -521,12 +520,12 @@ fn build_bitmapkeys(
         let n_attrs = keyformat.len() as u32;
         let data_size = 4 + n_attrs * 4;
         let mut value = Vec::new();
-        value.write_u32::<LittleEndian>(1).unwrap();
-        value.write_u32::<LittleEndian>(0).unwrap();
-        value.write_u32::<LittleEndian>(data_size).unwrap();
-        value.write_u32::<LittleEndian>(n_attrs).unwrap();
+        value.extend_from_slice(&1u32.to_le_bytes());
+        value.extend_from_slice(&0u32.to_le_bytes());
+        value.extend_from_slice(&data_size.to_le_bytes());
+        value.extend_from_slice(&n_attrs.to_le_bytes());
         for mask in attr_masks {
-            value.write_u32::<LittleEndian>(mask).unwrap();
+            value.extend_from_slice(&mask.to_le_bytes());
         }
         entries.push((facet.identifier as u32, value));
     }

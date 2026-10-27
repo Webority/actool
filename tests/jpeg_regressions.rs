@@ -4,6 +4,7 @@
 //! JPEG imageset entries as raw DWAR-wrapped data inside the CAR, using
 //! pixel format `GEPJ` and layout 12. Below that threshold it copies the
 //! JPEG out as a loose file next to the compiled output.
+#![cfg(test)]
 
 use actool::{car, compiler};
 use std::fs;

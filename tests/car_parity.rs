@@ -1,5 +1,7 @@
 //! Byte-level parity checks for CAR helpers against the Python implementation.
 
+#![cfg(test)]
+
 use actool::car;
 use std::io::Read;
 

@@ -15,32 +15,43 @@
 #[cfg(not(target_os = "macos"))]
 use anyhow::Result;
 use regex::Regex;
+use std::sync::LazyLock;
+
+static SVG_WIDTH_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r#"width="(\d+(?:\.\d+)?)""#));
+static SVG_HEIGHT_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r#"height="(\d+(?:\.\d+)?)""#));
+static SVG_VIEWBOX_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r#"viewBox="[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)""#));
 
 /// Extract (width, height) from SVG root element attributes. Falls back
 /// to the viewBox when width/height aren't specified. Pure parsing — available
 /// on every platform.
-pub fn parse_svg_dimensions(svg: &[u8]) -> (u32, u32) {
+pub fn parse_svg_dimensions(svg: &[u8]) -> anyhow::Result<(u32, u32)> {
     let slice = &svg[..svg.len().min(2048)];
     let text = String::from_utf8_lossy(slice);
 
-    let w_re = Regex::new(r#"width="(\d+(?:\.\d+)?)""#).unwrap();
-    let h_re = Regex::new(r#"height="(\d+(?:\.\d+)?)""#).unwrap();
+    let w_re = SVG_WIDTH_RE
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("invalid built-in pattern: {e}"))?;
+    let h_re = SVG_HEIGHT_RE
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("invalid built-in pattern: {e}"))?;
     if let (Some(w), Some(h)) = (w_re.captures(&text), h_re.captures(&text)) {
         let wv: f64 = w[1].parse().unwrap_or(0.0);
         let hv: f64 = h[1].parse().unwrap_or(0.0);
-        return (wv as u32, hv as u32);
+        return Ok((wv as u32, hv as u32));
     }
 
-    let vb_re = Regex::new(
-        r#"viewBox="[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)""#,
-    )
-    .unwrap();
+    let vb_re = SVG_VIEWBOX_RE
+        .as_ref()
+        .map_err(|e| anyhow::anyhow!("invalid built-in pattern: {e}"))?;
     if let Some(cap) = vb_re.captures(&text) {
         let wv: f64 = cap[1].parse().unwrap_or(0.0);
         let hv: f64 = cap[2].parse().unwrap_or(0.0);
-        return (wv as u32, hv as u32);
+        return Ok((wv as u32, hv as u32));
     }
-    (0, 0)
+    Ok((0, 0))
 }
 
 /// Whether CoreSVG rasterization is available (always `false` off macOS).
@@ -71,7 +82,6 @@ pub use imp::{has_coresvg, rasterize_svg};
 mod imp {
     use super::parse_svg_dimensions;
     use anyhow::{anyhow, Result};
-    use std::ffi::CString;
     use std::os::raw::{c_char, c_double, c_void};
     use std::sync::OnceLock;
 
@@ -124,27 +134,15 @@ mod imp {
         static CELL: OnceLock<Option<CoreSvgSyms>> = OnceLock::new();
         CELL.get_or_init(|| unsafe {
             let cg = dlopen(
-                CString::new(
-                    "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
-                )
-                .unwrap()
-                .as_ptr(),
+                c"/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics".as_ptr(),
                 RTLD_LAZY,
             );
             let cf = dlopen(
-                CString::new(
-                    "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
-                )
-                .unwrap()
-                .as_ptr(),
+                c"/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation".as_ptr(),
                 RTLD_LAZY,
             );
             let svg = dlopen(
-                CString::new(
-                    "/System/Library/PrivateFrameworks/CoreSVG.framework/CoreSVG",
-                )
-                .unwrap()
-                .as_ptr(),
+                c"/System/Library/PrivateFrameworks/CoreSVG.framework/CoreSVG".as_ptr(),
                 RTLD_LAZY,
             );
             if cg.is_null() || cf.is_null() || svg.is_null() {
@@ -152,8 +150,7 @@ mod imp {
             }
             macro_rules! sym {
                 ($handle:expr, $name:expr, $ty:ty) => {{
-                    let n = CString::new($name).unwrap();
-                    let p = dlsym($handle, n.as_ptr());
+                    let p = dlsym($handle, $name.as_ptr());
                     if p.is_null() {
                         return None;
                     }
@@ -161,32 +158,23 @@ mod imp {
                 }};
             }
             let srgb_name_ptr = {
-                let n = CString::new("kCGColorSpaceSRGB").unwrap();
-                let p = dlsym(cg, n.as_ptr());
+                let p = dlsym(cg, c"kCGColorSpaceSRGB".as_ptr());
                 if p.is_null() {
                     return None;
                 }
                 *(p as *mut *mut c_void)
             };
             Some(CoreSvgSyms {
-                cf_data_create: sym!(cf, "CFDataCreate", CFDataCreateFn),
-                cf_release: sym!(cf, "CFRelease", CFReleaseFn),
-                svg_create: sym!(svg, "CGSVGDocumentCreateFromData", CGSVGDocCreateFn),
-                ctx_draw_svg: sym!(
-                    svg,
-                    "CGContextDrawSVGDocument",
-                    CGContextDrawSVGFn
-                ),
-                bitmap_create: sym!(cg, "CGBitmapContextCreate", CGBitmapCreateFn),
-                cs_create_named: sym!(
-                    cg,
-                    "CGColorSpaceCreateWithName",
-                    CGColorSpaceCreateFn
-                ),
-                ctx_scale: sym!(cg, "CGContextScaleCTM", CGContextScaleFn),
-                bitmap_get_data: sym!(cg, "CGBitmapContextGetData", CGBitmapGetDataFn),
-                ctx_release: sym!(cg, "CGContextRelease", CGContextReleaseFn),
-                cs_release: sym!(cg, "CGColorSpaceRelease", CGContextReleaseFn),
+                cf_data_create: sym!(cf, c"CFDataCreate", CFDataCreateFn),
+                cf_release: sym!(cf, c"CFRelease", CFReleaseFn),
+                svg_create: sym!(svg, c"CGSVGDocumentCreateFromData", CGSVGDocCreateFn),
+                ctx_draw_svg: sym!(svg, c"CGContextDrawSVGDocument", CGContextDrawSVGFn),
+                bitmap_create: sym!(cg, c"CGBitmapContextCreate", CGBitmapCreateFn),
+                cs_create_named: sym!(cg, c"CGColorSpaceCreateWithName", CGColorSpaceCreateFn),
+                ctx_scale: sym!(cg, c"CGContextScaleCTM", CGContextScaleFn),
+                bitmap_get_data: sym!(cg, c"CGBitmapContextGetData", CGBitmapGetDataFn),
+                ctx_release: sym!(cg, c"CGContextRelease", CGContextReleaseFn),
+                cs_release: sym!(cg, c"CGColorSpaceRelease", CGContextReleaseFn),
                 srgb_name: srgb_name_ptr,
             })
         })
@@ -255,7 +243,7 @@ mod imp {
             // top-left corner instead of scaled). When the requested width matches
             // the SVG's native size this reduces to the integer `scale` and stays
             // byte-identical to the old behaviour.
-            let (nw, nh) = parse_svg_dimensions(svg_data);
+            let (nw, nh) = parse_svg_dimensions(svg_data)?;
             let (nw, nh) = if nw > 0 && nh > 0 {
                 (nw, nh)
             } else {
@@ -288,25 +276,25 @@ mod tests {
     #[test]
     fn parse_width_height() {
         let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48" viewBox="0 0 64 48"></svg>"#;
-        assert_eq!(parse_svg_dimensions(svg), (64, 48));
+        assert_eq!(parse_svg_dimensions(svg).unwrap(), (64, 48));
     }
 
     #[test]
     fn parse_from_viewbox() {
         let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"></svg>"#;
-        assert_eq!(parse_svg_dimensions(svg), (32, 32));
+        assert_eq!(parse_svg_dimensions(svg).unwrap(), (32, 32));
     }
 
     #[test]
     fn parse_fractional_width() {
         let svg = br#"<svg width="10.5" height="20.75" viewBox="0 0 10 20"></svg>"#;
-        assert_eq!(parse_svg_dimensions(svg), (10, 20));
+        assert_eq!(parse_svg_dimensions(svg).unwrap(), (10, 20));
     }
 
     #[test]
     fn parse_missing() {
         let svg = br#"<svg></svg>"#;
-        assert_eq!(parse_svg_dimensions(svg), (0, 0));
+        assert_eq!(parse_svg_dimensions(svg).unwrap(), (0, 0));
     }
 
     #[test]

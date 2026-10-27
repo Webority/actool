@@ -4,6 +4,8 @@
 //! checks the output structure. Pixel-byte equivalence with the Python
 //! implementation is confirmed in the commit history (sha256 287ef254…).
 
+#![cfg(test)]
+
 use actool::{bom::BomWriter, car, catalog::AssetCatalog, compiler};
 use std::path::PathBuf;
 

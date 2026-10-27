@@ -7,6 +7,7 @@
 //! * **Negative cases** — pathological inputs that Apple errors on; we
 //!   assert `compile_icon_bundle` returns `Err` (not a panic, not a silent
 //!   empty success) with a useful message.
+#![cfg(test)]
 
 use actool::icon_bundle::{self, compile_icon_bundle};
 use std::path::{Path, PathBuf};

@@ -1,5 +1,6 @@
 //! Regression tests for atlas packing behavior, mirroring the key checks
 //! in the Python test_packing.py suite.
+#![cfg(test)]
 
 use actool::compiler;
 use image::{ImageBuffer, Rgba};

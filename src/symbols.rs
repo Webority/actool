@@ -203,11 +203,10 @@ pub fn split_words(name: &str) -> Vec<String> {
             Some(Kind::Upper) if k == Kind::Lower => {
                 // UPPERLower: last upper belongs with the lower run
                 if current.chars().count() > 1 {
-                    let mut chars: Vec<char> = current.chars().collect();
-                    let last = chars.pop().unwrap();
-                    let head: String = chars.into_iter().collect();
-                    words.push(head);
-                    current = String::from(last);
+                    if let Some(last) = current.pop() {
+                        words.push(std::mem::take(&mut current));
+                        current.push(last);
+                    }
                 }
                 current.push(ch);
             }

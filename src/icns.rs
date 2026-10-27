@@ -93,29 +93,29 @@ fn make_exif(width: u32, height: u32) -> Vec<u8> {
     let mut buf = Vec::new();
     buf.extend_from_slice(b"Exif\x00\x00");
     buf.extend_from_slice(b"MM");
-    buf.write_u16::<BigEndian>(42).unwrap();
-    buf.write_u32::<BigEndian>(8).unwrap();
+    buf.extend_from_slice(&42u16.to_be_bytes());
+    buf.extend_from_slice(&8u32.to_be_bytes());
 
     // IFD0
-    buf.write_u16::<BigEndian>(1).unwrap(); // count
+    buf.extend_from_slice(&1u16.to_be_bytes()); // count
     let exif_ifd_offset: u32 = 26;
-    buf.write_u16::<BigEndian>(0x8769).unwrap();
-    buf.write_u16::<BigEndian>(4).unwrap();
-    buf.write_u32::<BigEndian>(1).unwrap();
-    buf.write_u32::<BigEndian>(exif_ifd_offset).unwrap();
-    buf.write_u32::<BigEndian>(0).unwrap(); // next IFD
+    buf.extend_from_slice(&0x8769u16.to_be_bytes());
+    buf.extend_from_slice(&4u16.to_be_bytes());
+    buf.extend_from_slice(&1u32.to_be_bytes());
+    buf.extend_from_slice(&exif_ifd_offset.to_be_bytes());
+    buf.extend_from_slice(&0u32.to_be_bytes()); // next IFD
 
     // ExifIFD
-    buf.write_u16::<BigEndian>(2).unwrap();
-    buf.write_u16::<BigEndian>(0xA002).unwrap();
-    buf.write_u16::<BigEndian>(4).unwrap();
-    buf.write_u32::<BigEndian>(1).unwrap();
-    buf.write_u32::<BigEndian>(width).unwrap();
-    buf.write_u16::<BigEndian>(0xA003).unwrap();
-    buf.write_u16::<BigEndian>(4).unwrap();
-    buf.write_u32::<BigEndian>(1).unwrap();
-    buf.write_u32::<BigEndian>(height).unwrap();
-    buf.write_u32::<BigEndian>(0).unwrap();
+    buf.extend_from_slice(&2u16.to_be_bytes());
+    buf.extend_from_slice(&0xA002u16.to_be_bytes());
+    buf.extend_from_slice(&4u16.to_be_bytes());
+    buf.extend_from_slice(&1u32.to_be_bytes());
+    buf.extend_from_slice(&width.to_be_bytes());
+    buf.extend_from_slice(&0xA003u16.to_be_bytes());
+    buf.extend_from_slice(&4u16.to_be_bytes());
+    buf.extend_from_slice(&1u32.to_be_bytes());
+    buf.extend_from_slice(&height.to_be_bytes());
+    buf.extend_from_slice(&0u32.to_be_bytes());
 
     buf
 }

@@ -5,7 +5,6 @@
 //! the wrapping BOM structures are big-endian (handled in bom.rs).
 
 use crate::{deepmap2, name_hash};
-use byteorder::{LittleEndian, WriteBytesExt};
 use std::io::Write;
 
 // Keyformat tokens
@@ -219,23 +218,19 @@ pub fn make_carheader_full(
 ) -> Vec<u8> {
     let mut buf = vec![0u8; 436];
     buf[0..4].copy_from_slice(b"RATC");
-    (&mut buf[4..8]).write_u32::<LittleEndian>(coreui_version).unwrap();
-    (&mut buf[8..12]).write_u32::<LittleEndian>(17).unwrap();
-    (&mut buf[12..16]).write_u32::<LittleEndian>(0).unwrap();
-    (&mut buf[16..20])
-        .write_u32::<LittleEndian>(rendition_count)
-        .unwrap();
+    buf[4..8].copy_from_slice(&u32::to_le_bytes(coreui_version));
+    buf[8..12].copy_from_slice(&u32::to_le_bytes(17));
+    buf[12..16].copy_from_slice(&u32::to_le_bytes(0));
+    buf[16..20].copy_from_slice(&u32::to_le_bytes(rendition_count));
     let main_ver = format!("@(#)PROGRAM:CoreUI  PROJECT:CoreUI-{coreui_version}.1\n");
     let main_ver_bytes = main_ver.as_bytes();
     buf[20..20 + main_ver_bytes.len()].copy_from_slice(main_ver_bytes);
     let ver_str = b"IBCocoaTouchImageCatalogTool-17.0\n";
     buf[148..148 + ver_str.len()].copy_from_slice(ver_str);
     // uuid at 404 = zeros; checksum at 420 = zero.
-    (&mut buf[424..428]).write_u32::<LittleEndian>(2).unwrap();
-    (&mut buf[428..432]).write_u32::<LittleEndian>(1).unwrap();
-    (&mut buf[432..436])
-        .write_u32::<LittleEndian>(key_semantics)
-        .unwrap();
+    buf[424..428].copy_from_slice(&u32::to_le_bytes(2));
+    buf[428..432].copy_from_slice(&u32::to_le_bytes(1));
+    buf[432..436].copy_from_slice(&u32::to_le_bytes(key_semantics));
     buf
 }
 
@@ -254,10 +249,10 @@ pub fn make_extended_metadata(platform: &str, min_deploy: &str) -> Vec<u8> {
 pub fn make_keyformat(attrs: &[u16]) -> Vec<u8> {
     let mut buf = Vec::with_capacity(12 + attrs.len() * 4);
     buf.extend_from_slice(b"tmfk");
-    buf.write_u32::<LittleEndian>(0).unwrap();
-    buf.write_u32::<LittleEndian>(attrs.len() as u32).unwrap();
+    buf.extend_from_slice(&u32::to_le_bytes(0));
+    buf.extend_from_slice(&u32::to_le_bytes(attrs.len() as u32));
     for a in attrs {
-        buf.write_u32::<LittleEndian>(*a as u32).unwrap();
+        buf.extend_from_slice(&u32::to_le_bytes(*a as u32));
     }
     buf
 }
@@ -307,7 +302,7 @@ pub fn make_rendition_key(parts: RenditionKeyParts, keyformat: &[u16]) -> Vec<u8
             24 => parts.variant,
             _ => 0,
         };
-        buf.write_u16::<LittleEndian>(v).unwrap();
+        buf.extend_from_slice(&u16::to_le_bytes(v));
     }
     buf
 }
@@ -326,7 +321,7 @@ pub fn make_appearancekeys_entries() -> Vec<(Vec<u8>, Vec<u8>)> {
         .iter()
         .map(|(name, id)| {
             let mut v = Vec::with_capacity(2);
-            v.write_u16::<LittleEndian>(*id).unwrap();
+            v.extend_from_slice(&u16::to_le_bytes(*id));
             (name.as_bytes().to_vec(), v)
         })
         .collect()
@@ -340,12 +335,12 @@ pub fn make_facetkey_value(element: u16, part: Option<u16>, identifier: u16) -> 
     }
     attrs.push((17, identifier));
     let mut buf = Vec::new();
-    buf.write_u16::<LittleEndian>(0).unwrap();
-    buf.write_u16::<LittleEndian>(0).unwrap();
-    buf.write_u16::<LittleEndian>(attrs.len() as u16).unwrap();
+    buf.extend_from_slice(&u16::to_le_bytes(0));
+    buf.extend_from_slice(&u16::to_le_bytes(0));
+    buf.extend_from_slice(&u16::to_le_bytes(attrs.len() as u16));
     for (n, v) in attrs {
-        buf.write_u16::<LittleEndian>(n).unwrap();
-        buf.write_u16::<LittleEndian>(v).unwrap();
+        buf.extend_from_slice(&u16::to_le_bytes(n));
+        buf.extend_from_slice(&u16::to_le_bytes(v));
     }
     buf
 }
@@ -357,9 +352,9 @@ fn compress_rle(pixel_data: &[u8], width: u32, height: u32, bpp: u32) -> Vec<u8>
     let height = height as usize;
 
     let mut header = Vec::with_capacity(12);
-    header.write_u32::<LittleEndian>(bpp as u32).unwrap();
-    header.write_u32::<LittleEndian>(width as u32).unwrap();
-    header.write_u32::<LittleEndian>(height as u32).unwrap();
+    header.extend_from_slice(&u32::to_le_bytes(bpp as u32));
+    header.extend_from_slice(&u32::to_le_bytes(width as u32));
+    header.extend_from_slice(&u32::to_le_bytes(height as u32));
 
     let mut row_offsets = Vec::with_capacity(height);
     let mut encoded = Vec::new();
@@ -388,8 +383,8 @@ fn compress_rle(pixel_data: &[u8], width: u32, height: u32, bpp: u32) -> Vec<u8>
                 run_len += 1;
             }
             if run_len >= 2 {
-                encoded.write_u16::<LittleEndian>(run_len as u16).unwrap();
-                encoded.write_u16::<LittleEndian>(0x8000).unwrap();
+                encoded.extend_from_slice(&u16::to_le_bytes(run_len as u16));
+                encoded.extend_from_slice(&u16::to_le_bytes(0x8000));
                 encoded.extend_from_slice(px);
                 x += run_len;
             } else {
@@ -404,8 +399,8 @@ fn compress_rle(pixel_data: &[u8], width: u32, height: u32, bpp: u32) -> Vec<u8>
                     x += 1;
                 }
                 let lit_count = (x - lit_start) as u16;
-                encoded.write_u16::<LittleEndian>(lit_count).unwrap();
-                encoded.write_u16::<LittleEndian>(0).unwrap();
+                encoded.extend_from_slice(&u16::to_le_bytes(lit_count));
+                encoded.extend_from_slice(&u16::to_le_bytes(0));
                 encoded.extend_from_slice(&row[lit_start * bpp..x * bpp]);
             }
         }
@@ -413,7 +408,7 @@ fn compress_rle(pixel_data: &[u8], width: u32, height: u32, bpp: u32) -> Vec<u8>
 
     let mut out = header;
     for o in row_offsets {
-        out.write_u32::<LittleEndian>(o).unwrap();
+        out.extend_from_slice(&u32::to_le_bytes(o));
     }
     out.extend_from_slice(&encoded);
     out
@@ -449,10 +444,10 @@ fn compress_kcbc(pixel_data: &[u8], height: u32) -> Option<Vec<u8>> {
         let n = rows_per_chunk.min(total - row);
         let chunk = &pixel_data[row * bpr..(row + n) * bpr];
         let compressed = lzfse_compress(chunk)?;
-        out.write_u32::<LittleEndian>(0).unwrap();
-        out.write_u32::<LittleEndian>(0).unwrap();
-        out.write_u32::<LittleEndian>(n as u32).unwrap();
-        out.write_u32::<LittleEndian>(compressed.len() as u32).unwrap();
+        out.extend_from_slice(&u32::to_le_bytes(0));
+        out.extend_from_slice(&u32::to_le_bytes(0));
+        out.extend_from_slice(&u32::to_le_bytes(n as u32));
+        out.extend_from_slice(&u32::to_le_bytes(compressed.len() as u32));
         out.extend_from_slice(&compressed);
         row += n;
         if row < total {
@@ -506,9 +501,9 @@ pub fn compress_data(
             let celm_ver: u32 = if is_opaque { 3 } else { 1 };
             let mut out = Vec::new();
             out.extend_from_slice(b"MLEC");
-            out.write_u32::<LittleEndian>(celm_ver).unwrap();
-            out.write_u32::<LittleEndian>(4).unwrap();
-            out.write_u32::<LittleEndian>(3).unwrap();
+            out.extend_from_slice(&u32::to_le_bytes(celm_ver));
+            out.extend_from_slice(&u32::to_le_bytes(4));
+            out.extend_from_slice(&u32::to_le_bytes(3));
             out.extend_from_slice(b"KCBC");
             out.extend_from_slice(&kcbc);
             return out;
@@ -520,9 +515,9 @@ pub fn compress_data(
             if gz.len() < pixel_data.len() {
                 let mut out = Vec::new();
                 out.extend_from_slice(b"MLEC");
-                out.write_u32::<LittleEndian>(0).unwrap();
-                out.write_u32::<LittleEndian>(2).unwrap();
-                out.write_u32::<LittleEndian>(gz.len() as u32).unwrap();
+                out.extend_from_slice(&u32::to_le_bytes(0));
+                out.extend_from_slice(&u32::to_le_bytes(2));
+                out.extend_from_slice(&u32::to_le_bytes(gz.len() as u32));
                 out.extend_from_slice(&gz);
                 return out;
             }
@@ -533,9 +528,9 @@ pub fn compress_data(
         if rle.len() < pixel_data.len() {
             let mut out = Vec::new();
             out.extend_from_slice(b"MLEC");
-            out.write_u32::<LittleEndian>(0).unwrap();
-            out.write_u32::<LittleEndian>(1).unwrap();
-            out.write_u32::<LittleEndian>(rle.len() as u32).unwrap();
+            out.extend_from_slice(&u32::to_le_bytes(0));
+            out.extend_from_slice(&u32::to_le_bytes(1));
+            out.extend_from_slice(&u32::to_le_bytes(rle.len() as u32));
             out.extend_from_slice(&rle);
             return out;
         }
@@ -543,9 +538,9 @@ pub fn compress_data(
 
     let mut out = Vec::new();
     out.extend_from_slice(b"MLEC");
-    out.write_u32::<LittleEndian>(0).unwrap();
-    out.write_u32::<LittleEndian>(0).unwrap();
-    out.write_u32::<LittleEndian>(pixel_data.len() as u32).unwrap();
+    out.extend_from_slice(&u32::to_le_bytes(0));
+    out.extend_from_slice(&u32::to_le_bytes(0));
+    out.extend_from_slice(&u32::to_le_bytes(pixel_data.len() as u32));
     out.extend_from_slice(pixel_data);
     out
 }
@@ -562,22 +557,16 @@ pub fn make_csi_header(
 ) -> Vec<u8> {
     let mut buf = vec![0u8; 184];
     buf[0..4].copy_from_slice(b"ISTC");
-    (&mut buf[4..8]).write_u32::<LittleEndian>(1).unwrap();
-    (&mut buf[8..12])
-        .write_u32::<LittleEndian>(rendition_flags)
-        .unwrap();
-    (&mut buf[12..16]).write_u32::<LittleEndian>(width).unwrap();
-    (&mut buf[16..20]).write_u32::<LittleEndian>(height).unwrap();
-    (&mut buf[20..24])
-        .write_u32::<LittleEndian>(scale_factor)
-        .unwrap();
+    buf[4..8].copy_from_slice(&u32::to_le_bytes(1));
+    buf[8..12].copy_from_slice(&u32::to_le_bytes(rendition_flags));
+    buf[12..16].copy_from_slice(&u32::to_le_bytes(width));
+    buf[16..20].copy_from_slice(&u32::to_le_bytes(height));
+    buf[20..24].copy_from_slice(&u32::to_le_bytes(scale_factor));
     buf[24..28].copy_from_slice(pixel_format);
-    (&mut buf[28..32])
-        .write_u32::<LittleEndian>(colorspace_id & 0xF)
-        .unwrap();
-    (&mut buf[32..36]).write_u32::<LittleEndian>(0).unwrap();
-    (&mut buf[36..38]).write_u16::<LittleEndian>(layout).unwrap();
-    (&mut buf[38..40]).write_u16::<LittleEndian>(0).unwrap();
+    buf[28..32].copy_from_slice(&u32::to_le_bytes(colorspace_id & 0xF));
+    buf[32..36].copy_from_slice(&u32::to_le_bytes(0));
+    buf[36..38].copy_from_slice(&u16::to_le_bytes(layout));
+    buf[38..40].copy_from_slice(&u16::to_le_bytes(0));
     let name_bytes = name.as_bytes();
     let n = name_bytes.len().min(127);
     buf[40..40 + n].copy_from_slice(&name_bytes[..n]);
@@ -607,16 +596,10 @@ pub fn build_csi(
         rendition_flags,
         colorspace_id,
     );
-    (&mut header[168..172])
-        .write_u32::<LittleEndian>(tlv_data.len() as u32)
-        .unwrap();
-    (&mut header[172..176])
-        .write_u32::<LittleEndian>(bitmaplist_unknown)
-        .unwrap();
-    (&mut header[176..180]).write_u32::<LittleEndian>(0).unwrap();
-    (&mut header[180..184])
-        .write_u32::<LittleEndian>(rendition_data.len() as u32)
-        .unwrap();
+    header[168..172].copy_from_slice(&u32::to_le_bytes(tlv_data.len() as u32));
+    header[172..176].copy_from_slice(&u32::to_le_bytes(bitmaplist_unknown));
+    header[176..180].copy_from_slice(&u32::to_le_bytes(0));
+    header[180..184].copy_from_slice(&u32::to_le_bytes(rendition_data.len() as u32));
     let mut out = Vec::with_capacity(header.len() + tlv_data.len() + rendition_data.len());
     out.extend_from_slice(&header);
     out.extend_from_slice(tlv_data);
@@ -626,18 +609,18 @@ pub fn build_csi(
 
 fn tlv_header(tag: u32, len: u32) -> Vec<u8> {
     let mut h = Vec::with_capacity(8);
-    h.write_u32::<LittleEndian>(tag).unwrap();
-    h.write_u32::<LittleEndian>(len).unwrap();
+    h.extend_from_slice(&u32::to_le_bytes(tag));
+    h.extend_from_slice(&u32::to_le_bytes(len));
     h
 }
 
 pub fn make_slices_tlv(width: u32, height: u32) -> Vec<u8> {
     let mut slice = Vec::new();
-    slice.write_u32::<LittleEndian>(1).unwrap();
-    slice.write_u32::<LittleEndian>(0).unwrap();
-    slice.write_u32::<LittleEndian>(0).unwrap();
-    slice.write_u32::<LittleEndian>(width).unwrap();
-    slice.write_u32::<LittleEndian>(height).unwrap();
+    slice.extend_from_slice(&u32::to_le_bytes(1));
+    slice.extend_from_slice(&u32::to_le_bytes(0));
+    slice.extend_from_slice(&u32::to_le_bytes(0));
+    slice.extend_from_slice(&u32::to_le_bytes(width));
+    slice.extend_from_slice(&u32::to_le_bytes(height));
     let mut out = tlv_header(0x03E9, slice.len() as u32);
     out.extend(slice);
     out
@@ -645,12 +628,12 @@ pub fn make_slices_tlv(width: u32, height: u32) -> Vec<u8> {
 
 pub fn make_metrics_tlv(width: u32, height: u32) -> Vec<u8> {
     let mut m = Vec::new();
-    m.write_u32::<LittleEndian>(1).unwrap();
+    m.extend_from_slice(&u32::to_le_bytes(1));
     for _ in 0..4 {
-        m.write_u32::<LittleEndian>(0).unwrap();
+        m.extend_from_slice(&u32::to_le_bytes(0));
     }
-    m.write_u32::<LittleEndian>(width).unwrap();
-    m.write_u32::<LittleEndian>(height).unwrap();
+    m.extend_from_slice(&u32::to_le_bytes(width));
+    m.extend_from_slice(&u32::to_le_bytes(height));
     let mut out = tlv_header(0x03EB, m.len() as u32);
     out.extend(m);
     out
@@ -658,8 +641,8 @@ pub fn make_metrics_tlv(width: u32, height: u32) -> Vec<u8> {
 
 pub fn make_blend_opacity_tlv() -> Vec<u8> {
     let mut d = Vec::new();
-    d.write_u32::<LittleEndian>(0).unwrap();
-    d.write_f32::<LittleEndian>(1.0).unwrap();
+    d.extend_from_slice(&u32::to_le_bytes(0));
+    d.extend_from_slice(&f32::to_le_bytes(1.0));
     let mut out = tlv_header(0x03EC, d.len() as u32);
     out.extend(d);
     out
@@ -667,8 +650,8 @@ pub fn make_blend_opacity_tlv() -> Vec<u8> {
 
 pub fn make_color_blend_opacity_tlv() -> Vec<u8> {
     let mut d = Vec::new();
-    d.write_u32::<LittleEndian>(0).unwrap();
-    d.write_f32::<LittleEndian>(0.0).unwrap();
+    d.extend_from_slice(&u32::to_le_bytes(0));
+    d.extend_from_slice(&f32::to_le_bytes(0.0));
     let mut out = tlv_header(0x03EC, d.len() as u32);
     out.extend(d);
     out
@@ -676,7 +659,7 @@ pub fn make_color_blend_opacity_tlv() -> Vec<u8> {
 
 pub fn make_exif_orientation_tlv(orientation: u32) -> Vec<u8> {
     let mut d = Vec::new();
-    d.write_u32::<LittleEndian>(orientation).unwrap();
+    d.extend_from_slice(&u32::to_le_bytes(orientation));
     let mut out = tlv_header(0x03EE, d.len() as u32);
     out.extend(d);
     out
@@ -689,7 +672,7 @@ pub fn make_bytes_per_row_tlv(width: u32, pixel_format: &[u8], aligned: bool) ->
         width * 4
     };
     let mut d = Vec::new();
-    d.write_u32::<LittleEndian>(bpr).unwrap();
+    d.extend_from_slice(&u32::to_le_bytes(bpr));
     let mut out = tlv_header(0x03EF, d.len() as u32);
     out.extend(d);
     out
@@ -707,38 +690,38 @@ pub fn make_inlk_tlv(
 ) -> Vec<u8> {
     let mut inlk = Vec::new();
     inlk.extend_from_slice(b"KLNI");
-    inlk.write_u32::<LittleEndian>(0).unwrap();
-    inlk.write_u32::<LittleEndian>(x).unwrap();
-    inlk.write_u32::<LittleEndian>(y).unwrap();
-    inlk.write_u32::<LittleEndian>(width).unwrap();
-    inlk.write_u32::<LittleEndian>(height).unwrap();
+    inlk.extend_from_slice(&u32::to_le_bytes(0));
+    inlk.extend_from_slice(&u32::to_le_bytes(x));
+    inlk.extend_from_slice(&u32::to_le_bytes(y));
+    inlk.extend_from_slice(&u32::to_le_bytes(width));
+    inlk.extend_from_slice(&u32::to_le_bytes(height));
 
     let mut attr = Vec::new();
-    attr.write_u16::<LittleEndian>(0).unwrap();
-    attr.write_u16::<LittleEndian>(1).unwrap();
-    attr.write_u16::<LittleEndian>(ELEMENT_PACKED).unwrap();
-    attr.write_u16::<LittleEndian>(2).unwrap();
-    attr.write_u16::<LittleEndian>(PART_REGULAR).unwrap();
+    attr.extend_from_slice(&u16::to_le_bytes(0));
+    attr.extend_from_slice(&u16::to_le_bytes(1));
+    attr.extend_from_slice(&u16::to_le_bytes(ELEMENT_PACKED));
+    attr.extend_from_slice(&u16::to_le_bytes(2));
+    attr.extend_from_slice(&u16::to_le_bytes(PART_REGULAR));
     if atlas_dim1 != 0 {
-        attr.write_u16::<LittleEndian>(8).unwrap();
-        attr.write_u16::<LittleEndian>(atlas_dim1).unwrap();
+        attr.extend_from_slice(&u16::to_le_bytes(8));
+        attr.extend_from_slice(&u16::to_le_bytes(atlas_dim1));
     }
     if atlas_identifier != 0 {
-        attr.write_u16::<LittleEndian>(17).unwrap();
-        attr.write_u16::<LittleEndian>(atlas_identifier).unwrap();
+        attr.extend_from_slice(&u16::to_le_bytes(17));
+        attr.extend_from_slice(&u16::to_le_bytes(atlas_identifier));
     }
-    attr.write_u16::<LittleEndian>(12).unwrap();
-    attr.write_u16::<LittleEndian>(scale).unwrap();
+    attr.extend_from_slice(&u16::to_le_bytes(12));
+    attr.extend_from_slice(&u16::to_le_bytes(scale));
     // iOS atlases are keyed per idiom; the link must name the atlas idiom
     // (attr 15) or CUICatalog can't resolve the packed image to its atlas.
     if idiom != 0 {
-        attr.write_u16::<LittleEndian>(15).unwrap();
-        attr.write_u16::<LittleEndian>(idiom).unwrap();
+        attr.extend_from_slice(&u16::to_le_bytes(15));
+        attr.extend_from_slice(&u16::to_le_bytes(idiom));
     }
-    attr.write_u16::<LittleEndian>(0).unwrap();
+    attr.extend_from_slice(&u16::to_le_bytes(0));
 
-    inlk.write_u16::<LittleEndian>(12).unwrap();
-    inlk.write_u16::<LittleEndian>(attr.len() as u16).unwrap();
+    inlk.extend_from_slice(&u16::to_le_bytes(12));
+    inlk.extend_from_slice(&u16::to_le_bytes(attr.len() as u16));
     inlk.extend(attr);
 
     let mut out = tlv_header(0x03F2, inlk.len() as u32);
@@ -822,7 +805,7 @@ pub fn build_packed_asset_csi(
         false,
     );
     let actual_comp = if rend_data.len() >= 12 {
-        u32::from_le_bytes(rend_data[8..12].try_into().unwrap())
+        u32::from_le_bytes([rend_data[8], rend_data[9], rend_data[10], rend_data[11]])
     } else {
         0
     };
@@ -834,7 +817,7 @@ pub fn build_packed_asset_csi(
         width * 4
     };
     tlv.extend(tlv_header(0x03EF, 4));
-    tlv.write_u32::<LittleEndian>(bpr).unwrap();
+    tlv.extend_from_slice(&u32::to_le_bytes(bpr));
 
     let cs_id = colorspace_for_pixel_format(pixel_format);
     build_csi(
@@ -861,12 +844,12 @@ pub struct LayerRef {
 }
 
 fn write_layer_key_fragment(buf: &mut Vec<u8>, r: &LayerRef) {
-    buf.write_u16::<LittleEndian>(1).unwrap();
-    buf.write_u16::<LittleEndian>(ELEMENT_UNIVERSAL).unwrap();
-    buf.write_u16::<LittleEndian>(2).unwrap();
-    buf.write_u16::<LittleEndian>(r.part).unwrap();
-    buf.write_u16::<LittleEndian>(17).unwrap();
-    buf.write_u16::<LittleEndian>(r.identifier).unwrap();
+    buf.extend_from_slice(&u16::to_le_bytes(1));
+    buf.extend_from_slice(&u16::to_le_bytes(ELEMENT_UNIVERSAL));
+    buf.extend_from_slice(&u16::to_le_bytes(2));
+    buf.extend_from_slice(&u16::to_le_bytes(r.part));
+    buf.extend_from_slice(&u16::to_le_bytes(17));
+    buf.extend_from_slice(&u16::to_le_bytes(r.identifier));
 }
 
 /// iconstack rendition (LAYOUT_ICONSTACK=1019). Apple emits one per
@@ -875,34 +858,34 @@ fn write_layer_key_fragment(buf: &mut Vec<u8>, r: &LayerRef) {
 /// that appearance.
 pub fn build_iconstack_csi(name: &str, dim: u32, layers: &[LayerRef]) -> Vec<u8> {
     let mut t3f4 = Vec::new();
-    t3f4.write_u32::<LittleEndian>(layers.len() as u32).unwrap();
+    t3f4.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for layer in layers {
         t3f4.extend(std::iter::repeat(0u8).take(28));
-        t3f4.write_f32::<LittleEndian>(1.0).unwrap();
-        t3f4.write_u32::<LittleEndian>(16).unwrap();
+        t3f4.extend_from_slice(&f32::to_le_bytes(1.0));
+        t3f4.extend_from_slice(&u32::to_le_bytes(16));
         write_layer_key_fragment(&mut t3f4, layer);
     }
     t3f4.extend(std::iter::repeat(0u8).take(4));
 
     let mut t3fc = Vec::new();
-    t3fc.write_u32::<LittleEndian>(layers.len() as u32).unwrap();
-    t3fc.write_u32::<LittleEndian>(0).unwrap();
+    t3fc.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
+    t3fc.extend_from_slice(&u32::to_le_bytes(0));
     for (i, _) in layers.iter().enumerate() {
-        t3fc.write_u32::<LittleEndian>(if i == 0 { 0 } else { 2 }).unwrap();
-        t3fc.write_u32::<LittleEndian>(0).unwrap();
-        t3fc.write_u32::<LittleEndian>(1).unwrap();
-        t3fc.write_u8(0).unwrap();
+        t3fc.extend_from_slice(&u32::to_le_bytes(if i == 0 { 0 } else { 2 }));
+        t3fc.extend_from_slice(&u32::to_le_bytes(0));
+        t3fc.extend_from_slice(&u32::to_le_bytes(1));
+        t3fc.push(0);
     }
 
     // 0x3FD: 4 (count) + N × 20-byte entries + 4-byte trailer.
     // Each entry is 16 zeros + f32 — Apple writes 0.5 for group-typed
     // layers (part == PART_ICON_GROUP), 0.0 otherwise.
     let mut t3fd = Vec::new();
-    t3fd.write_u32::<LittleEndian>(layers.len() as u32).unwrap();
+    t3fd.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for layer in layers {
         t3fd.extend(std::iter::repeat(0u8).take(16));
         let v = if layer.part == PART_ICON_GROUP { 0.5 } else { 0.0 };
-        t3fd.write_f32::<LittleEndian>(v).unwrap();
+        t3fd.extend_from_slice(&f32::to_le_bytes(v));
     }
     t3fd.extend(std::iter::repeat(0u8).take(4));
 
@@ -940,32 +923,32 @@ pub fn build_iconstack_csi(name: &str, dim: u32, layers: &[LayerRef]) -> Vec<u8>
 /// (Apple writes it twice into each entry — probably as render hints).
 pub fn build_icongroup_csi(name: &str, child_dim: u32, layers: &[LayerRef]) -> Vec<u8> {
     let mut t3f4 = Vec::new();
-    t3f4.write_u32::<LittleEndian>(layers.len() as u32).unwrap();
+    t3f4.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for layer in layers {
         t3f4.extend(std::iter::repeat(0u8).take(16));
-        t3f4.write_u32::<LittleEndian>(child_dim).unwrap();
-        t3f4.write_u32::<LittleEndian>(child_dim).unwrap();
-        t3f4.write_u32::<LittleEndian>(0).unwrap();
-        t3f4.write_f32::<LittleEndian>(1.0).unwrap();
-        t3f4.write_u32::<LittleEndian>(16).unwrap();
+        t3f4.extend_from_slice(&u32::to_le_bytes(child_dim));
+        t3f4.extend_from_slice(&u32::to_le_bytes(child_dim));
+        t3f4.extend_from_slice(&u32::to_le_bytes(0));
+        t3f4.extend_from_slice(&f32::to_le_bytes(1.0));
+        t3f4.extend_from_slice(&u32::to_le_bytes(16));
         write_layer_key_fragment(&mut t3f4, layer);
     }
     t3f4.extend(std::iter::repeat(0u8).take(4));
 
     let mut t3fc = Vec::new();
-    t3fc.write_u32::<LittleEndian>(layers.len() as u32).unwrap();
-    t3fc.write_u32::<LittleEndian>(0).unwrap();
+    t3fc.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
+    t3fc.extend_from_slice(&u32::to_le_bytes(0));
     for _ in layers {
-        t3fc.write_u32::<LittleEndian>(0).unwrap();
-        t3fc.write_u32::<LittleEndian>(0).unwrap();
-        t3fc.write_u32::<LittleEndian>(1).unwrap();
-        t3fc.write_u8(0).unwrap();
+        t3fc.extend_from_slice(&u32::to_le_bytes(0));
+        t3fc.extend_from_slice(&u32::to_le_bytes(0));
+        t3fc.extend_from_slice(&u32::to_le_bytes(1));
+        t3fc.push(0);
     }
 
     // Same 20-byte-entry shape as iconstack 0x3FD, with image layers (the
     // child of a group) always carrying f32 = 0.0.
     let mut t3fd = Vec::new();
-    t3fd.write_u32::<LittleEndian>(layers.len() as u32).unwrap();
+    t3fd.extend_from_slice(&u32::to_le_bytes(layers.len() as u32));
     for _ in layers {
         t3fd.extend(std::iter::repeat(0u8).take(20));
     }
@@ -1002,10 +985,10 @@ pub fn build_icongroup_csi(name: &str, child_dim: u32, layers: &[LayerRef]) -> V
 fn make_layered_uti_tlv() -> Vec<u8> {
     const UTI: &[u8] = b"public.layeredimage";
     let mut body = Vec::new();
-    body.write_u32::<LittleEndian>(UTI.len() as u32 + 1).unwrap();
-    body.write_u32::<LittleEndian>(0).unwrap();
+    body.extend_from_slice(&u32::to_le_bytes(UTI.len() as u32 + 1));
+    body.extend_from_slice(&u32::to_le_bytes(0));
     body.extend_from_slice(UTI);
-    body.write_u8(0).unwrap();
+    body.push(0);
     let mut out = tlv_header(0x03ED, body.len() as u32);
     out.extend(body);
     out
@@ -1025,11 +1008,11 @@ fn make_dwar_trailer() -> Vec<u8> {
 pub fn build_icon_color_csi(name: &str, colorspace_id: u32, components: &[f64]) -> Vec<u8> {
     let mut colr = Vec::new();
     colr.extend_from_slice(b"RLOC");
-    colr.write_u32::<LittleEndian>(1).unwrap();
-    colr.write_u32::<LittleEndian>(colorspace_id).unwrap();
-    colr.write_u32::<LittleEndian>(components.len() as u32).unwrap();
+    colr.extend_from_slice(&u32::to_le_bytes(1));
+    colr.extend_from_slice(&u32::to_le_bytes(colorspace_id));
+    colr.extend_from_slice(&u32::to_le_bytes(components.len() as u32));
     for c in components {
-        colr.write_f64::<LittleEndian>(*c).unwrap();
+        colr.extend_from_slice(&f64::to_le_bytes(*c));
     }
     let mut tlv = Vec::new();
     tlv.extend(make_color_blend_opacity_tlv());
@@ -1063,18 +1046,18 @@ pub fn build_icon_gradient_csi(
     // color, geom unused), 1 = linear two-stop background gradient.
     let mut grad = Vec::new();
     grad.extend_from_slice(b"ARGG");
-    grad.write_u32::<LittleEndian>(stops.len() as u32).unwrap();
-    grad.write_u32::<LittleEndian>(kind).unwrap();
-    grad.write_u32::<LittleEndian>(0).unwrap();
+    grad.extend_from_slice(&u32::to_le_bytes(stops.len() as u32));
+    grad.extend_from_slice(&u32::to_le_bytes(kind));
+    grad.extend_from_slice(&u32::to_le_bytes(0));
     for f in geom.iter() {
-        grad.write_f32::<LittleEndian>(*f).unwrap();
+        grad.extend_from_slice(&f32::to_le_bytes(*f));
     }
     for (pos, color_name) in stops {
-        grad.write_f32::<LittleEndian>(*pos).unwrap();
+        grad.extend_from_slice(&f32::to_le_bytes(*pos));
         let b = color_name.as_bytes();
-        grad.write_u32::<LittleEndian>((b.len() + 1) as u32).unwrap();
+        grad.extend_from_slice(&u32::to_le_bytes((b.len() + 1) as u32));
         grad.extend_from_slice(b);
-        grad.write_u8(0).unwrap();
+        grad.push(0);
     }
     let mut tlv = Vec::new();
     tlv.extend(make_color_blend_opacity_tlv());
@@ -1104,13 +1087,13 @@ pub fn build_color_csi(
 ) -> Vec<u8> {
     let mut colr = Vec::new();
     colr.extend_from_slice(b"RLOC");
-    colr.write_u32::<LittleEndian>(1).unwrap();
-    colr.write_u32::<LittleEndian>(colorspace_id & 0xFF).unwrap();
-    colr.write_u32::<LittleEndian>(4).unwrap();
-    colr.write_f64::<LittleEndian>(red).unwrap();
-    colr.write_f64::<LittleEndian>(green).unwrap();
-    colr.write_f64::<LittleEndian>(blue).unwrap();
-    colr.write_f64::<LittleEndian>(alpha).unwrap();
+    colr.extend_from_slice(&u32::to_le_bytes(1));
+    colr.extend_from_slice(&u32::to_le_bytes(colorspace_id & 0xFF));
+    colr.extend_from_slice(&u32::to_le_bytes(4));
+    colr.extend_from_slice(&f64::to_le_bytes(red));
+    colr.extend_from_slice(&f64::to_le_bytes(green));
+    colr.extend_from_slice(&f64::to_le_bytes(blue));
+    colr.extend_from_slice(&f64::to_le_bytes(alpha));
 
     let mut tlv = Vec::new();
     tlv.extend(make_color_blend_opacity_tlv());
@@ -1138,13 +1121,11 @@ pub fn build_sprite_atlas_metadata_csi(sprite_names: &[String]) -> Vec<u8> {
 
     if !sprite_names.is_empty() {
         let mut contents = Vec::new();
-        contents
-            .write_u32::<LittleEndian>(sprite_names.len() as u32)
-            .unwrap();
-        contents.write_u32::<LittleEndian>(0).unwrap();
+        contents.extend_from_slice(&u32::to_le_bytes(sprite_names.len() as u32));
+        contents.extend_from_slice(&u32::to_le_bytes(0));
         for sn in sprite_names {
             let b = sn.as_bytes();
-            contents.write_u32::<LittleEndian>(b.len() as u32).unwrap();
+            contents.extend_from_slice(&u32::to_le_bytes(b.len() as u32));
             contents.extend_from_slice(b);
         }
         tlv.extend(tlv_header(0x03F5, contents.len() as u32));
@@ -1169,8 +1150,8 @@ pub fn build_sprite_atlas_metadata_csi(sprite_names: &[String]) -> Vec<u8> {
 pub fn build_data_csi(raw_data: &[u8]) -> Vec<u8> {
     let mut rawd = Vec::new();
     rawd.extend_from_slice(b"DWAR");
-    rawd.write_u32::<LittleEndian>(0).unwrap();
-    rawd.write_u32::<LittleEndian>(raw_data.len() as u32).unwrap();
+    rawd.extend_from_slice(&u32::to_le_bytes(0));
+    rawd.extend_from_slice(&u32::to_le_bytes(raw_data.len() as u32));
     rawd.extend_from_slice(raw_data);
 
     let mut tlv = Vec::new();
@@ -1195,8 +1176,8 @@ pub fn build_data_csi(raw_data: &[u8]) -> Vec<u8> {
 pub fn build_pdf_csi(filename: &str, pdf_data: &[u8]) -> Vec<u8> {
     let mut rawd = Vec::new();
     rawd.extend_from_slice(b"DWAR");
-    rawd.write_u32::<LittleEndian>(0).unwrap();
-    rawd.write_u32::<LittleEndian>(pdf_data.len() as u32).unwrap();
+    rawd.extend_from_slice(&u32::to_le_bytes(0));
+    rawd.extend_from_slice(&u32::to_le_bytes(pdf_data.len() as u32));
     rawd.extend_from_slice(pdf_data);
 
     let mut tlv = Vec::new();
@@ -1273,8 +1254,8 @@ pub fn build_jpeg_csi(filename: &str, jpeg_data: &[u8]) -> Vec<u8> {
     let (width, height) = jpeg_dimensions(jpeg_data);
     let mut rawd = Vec::new();
     rawd.extend_from_slice(b"DWAR");
-    rawd.write_u32::<LittleEndian>(0).unwrap();
-    rawd.write_u32::<LittleEndian>(jpeg_data.len() as u32).unwrap();
+    rawd.extend_from_slice(&u32::to_le_bytes(0));
+    rawd.extend_from_slice(&u32::to_le_bytes(jpeg_data.len() as u32));
     rawd.extend_from_slice(jpeg_data);
 
     let mut tlv = Vec::new();
@@ -1305,8 +1286,8 @@ pub fn build_svg_csi(filename: &str, svg_data: &[u8]) -> Vec<u8> {
     };
     let mut rawd = Vec::new();
     rawd.extend_from_slice(b"DWAR");
-    rawd.write_u32::<LittleEndian>(is_compressed).unwrap();
-    rawd.write_u32::<LittleEndian>(stored.len() as u32).unwrap();
+    rawd.extend_from_slice(&u32::to_le_bytes(is_compressed));
+    rawd.extend_from_slice(&u32::to_le_bytes(stored.len() as u32));
     rawd.extend_from_slice(&stored);
 
     let mut tlv = Vec::new();
@@ -1547,7 +1528,7 @@ impl Rendition {
                 opaque,
             );
             let actual_comp = if rend_data.len() >= 12 {
-                u32::from_le_bytes(rend_data[8..12].try_into().unwrap())
+                u32::from_le_bytes([rend_data[8], rend_data[9], rend_data[10], rend_data[11]])
             } else {
                 0
             };
@@ -1560,7 +1541,7 @@ impl Rendition {
                 self.width * 4
             };
             tlv.extend(tlv_header(0x03EF, 4));
-            tlv.write_u32::<LittleEndian>(bpr).unwrap();
+            tlv.extend_from_slice(&u32::to_le_bytes(bpr));
         }
 
         let mut intent = self.template_rendering_intent;
@@ -1602,14 +1583,14 @@ pub fn build_multisize_rendition(
 ) -> Rendition {
     let mut msis_entries = Vec::new();
     for e in entries {
-        msis_entries.write_u32::<LittleEndian>(e.width).unwrap();
-        msis_entries.write_u32::<LittleEndian>(e.height).unwrap();
-        msis_entries.write_u32::<LittleEndian>(e.index).unwrap();
+        msis_entries.extend_from_slice(&u32::to_le_bytes(e.width));
+        msis_entries.extend_from_slice(&u32::to_le_bytes(e.height));
+        msis_entries.extend_from_slice(&u32::to_le_bytes(e.index));
     }
     let mut msis = Vec::new();
     msis.extend_from_slice(b"SISM");
-    msis.write_u32::<LittleEndian>(1).unwrap();
-    msis.write_u32::<LittleEndian>(entries.len() as u32).unwrap();
+    msis.extend_from_slice(&u32::to_le_bytes(1));
+    msis.extend_from_slice(&u32::to_le_bytes(entries.len() as u32));
     msis.extend(msis_entries);
 
     let mut tlv = Vec::new();

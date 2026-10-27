@@ -6,6 +6,8 @@
 //! platform string, per-idiom rendition keys, and the idiom filtering that
 //! drops `mac`/`ios-marketing` from regular imagesets.
 
+#![cfg(test)]
+
 use actool::compiler;
 use std::path::{Path, PathBuf};
 

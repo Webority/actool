@@ -8,6 +8,8 @@
 //! resolution bugs covered by commits `e714876`, `d4ebe6f`, and the
 //! `<stem>/Group` / `.icns` / palette work that followed.
 
+#![cfg(test)]
+
 use actool::icon_bundle;
 use std::fs;
 use std::io::Cursor;

@@ -366,10 +366,8 @@ pub fn group_for_packing(
     let mut inline: Vec<usize> = force_inline;
 
     // Sort keys deterministically to match Python's sorted()
-    let mut keys: Vec<_> = groups.keys().cloned().collect();
-    keys.sort_by_key(|k| (k.0, k.1, k.2, k.3));
-    for k in keys {
-        let idxs = groups.shift_remove(&k).unwrap();
+    groups.sort_unstable_keys();
+    for (k, idxs) in groups {
         // A group packs when it holds ≥2 distinct assets. Imagesets are
         // distinct by identifier (one per imageset). iOS app icons all share
         // the icon facet's identifier, so they're distinct by size (dim2)

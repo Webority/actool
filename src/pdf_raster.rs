@@ -13,7 +13,6 @@
 //! still emitted so the catalog stays self-consistent.
 
 use anyhow::{anyhow, Result};
-use std::ffi::CString;
 use std::os::raw::{c_char, c_double, c_void};
 use std::sync::OnceLock;
 
@@ -116,15 +115,11 @@ fn load_syms() -> Option<&'static PdfSyms> {
     static CELL: OnceLock<Option<PdfSyms>> = OnceLock::new();
     CELL.get_or_init(|| unsafe {
         let cg = dlopen(
-            CString::new("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
-                .unwrap()
-                .as_ptr(),
+            c"/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics".as_ptr(),
             RTLD_LAZY,
         );
         let cf = dlopen(
-            CString::new("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
-                .unwrap()
-                .as_ptr(),
+            c"/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation".as_ptr(),
             RTLD_LAZY,
         );
         if cg.is_null() || cf.is_null() {
@@ -132,8 +127,7 @@ fn load_syms() -> Option<&'static PdfSyms> {
         }
         macro_rules! sym {
             ($handle:expr, $name:expr, $ty:ty) => {{
-                let n = CString::new($name).unwrap();
-                let p = dlsym($handle, n.as_ptr());
+                let p = dlsym($handle, $name.as_ptr());
                 if p.is_null() {
                     return None;
                 }
@@ -141,38 +135,37 @@ fn load_syms() -> Option<&'static PdfSyms> {
             }};
         }
         let srgb_name_ptr = {
-            let n = CString::new("kCGColorSpaceSRGB").unwrap();
-            let p = dlsym(cg, n.as_ptr());
+            let p = dlsym(cg, c"kCGColorSpaceSRGB".as_ptr());
             if p.is_null() {
                 return None;
             }
             *(p as *mut *mut c_void)
         };
         Some(PdfSyms {
-            cf_data_create: sym!(cf, "CFDataCreate", CFDataCreateFn),
-            cf_release: sym!(cf, "CFRelease", CFReleaseFn),
-            dp_create: sym!(cg, "CGDataProviderCreateWithCFData", CGDPCreateWithCFData),
-            dp_release: sym!(cg, "CGDataProviderRelease", CGDPRelease),
-            doc_create: sym!(cg, "CGPDFDocumentCreateWithProvider", CGPDFDocCreate),
-            doc_release: sym!(cg, "CGPDFDocumentRelease", CGPDFDocRelease),
-            doc_get_page: sym!(cg, "CGPDFDocumentGetPage", CGPDFDocGetPage),
-            page_get_box_rect: sym!(cg, "CGPDFPageGetBoxRect", CGPDFPageGetBoxRect),
-            cs_create_named: sym!(cg, "CGColorSpaceCreateWithName", CGColorSpaceCreateFn),
-            cs_release: sym!(cg, "CGColorSpaceRelease", CGColorSpaceRelease),
-            bitmap_create: sym!(cg, "CGBitmapContextCreate", CGBitmapCreateFn),
-            bitmap_get_data: sym!(cg, "CGBitmapContextGetData", CGBitmapGetDataFn),
-            ctx_scale: sym!(cg, "CGContextScaleCTM", CGContextScaleFn),
-            ctx_draw_pdf: sym!(cg, "CGContextDrawPDFPage", CGContextDrawPDFFn),
-            ctx_release: sym!(cg, "CGContextRelease", CGContextReleaseFn),
-            cf_data_create_mutable: sym!(cf, "CFDataCreateMutable", CFDataCreateMutableFn),
-            data_consumer_create: sym!(cg, "CGDataConsumerCreateWithCFData", CGDataConsumerCreateFn),
-            data_consumer_release: sym!(cg, "CGDataConsumerRelease", CGDPRelease),
-            pdf_ctx_create: sym!(cg, "CGPDFContextCreate", CGPDFContextCreateFn),
-            pdf_begin_page: sym!(cg, "CGPDFContextBeginPage", CGPDFContextPageFn),
-            pdf_end_page: sym!(cg, "CGPDFContextEndPage", CGContextVoidFn),
-            pdf_close: sym!(cg, "CGPDFContextClose", CGContextVoidFn),
-            cf_data_get_length: sym!(cf, "CFDataGetLength", CFDataGetLengthFn),
-            cf_data_get_byte_ptr: sym!(cf, "CFDataGetBytePtr", CFDataGetBytePtrFn),
+            cf_data_create: sym!(cf, c"CFDataCreate", CFDataCreateFn),
+            cf_release: sym!(cf, c"CFRelease", CFReleaseFn),
+            dp_create: sym!(cg, c"CGDataProviderCreateWithCFData", CGDPCreateWithCFData),
+            dp_release: sym!(cg, c"CGDataProviderRelease", CGDPRelease),
+            doc_create: sym!(cg, c"CGPDFDocumentCreateWithProvider", CGPDFDocCreate),
+            doc_release: sym!(cg, c"CGPDFDocumentRelease", CGPDFDocRelease),
+            doc_get_page: sym!(cg, c"CGPDFDocumentGetPage", CGPDFDocGetPage),
+            page_get_box_rect: sym!(cg, c"CGPDFPageGetBoxRect", CGPDFPageGetBoxRect),
+            cs_create_named: sym!(cg, c"CGColorSpaceCreateWithName", CGColorSpaceCreateFn),
+            cs_release: sym!(cg, c"CGColorSpaceRelease", CGColorSpaceRelease),
+            bitmap_create: sym!(cg, c"CGBitmapContextCreate", CGBitmapCreateFn),
+            bitmap_get_data: sym!(cg, c"CGBitmapContextGetData", CGBitmapGetDataFn),
+            ctx_scale: sym!(cg, c"CGContextScaleCTM", CGContextScaleFn),
+            ctx_draw_pdf: sym!(cg, c"CGContextDrawPDFPage", CGContextDrawPDFFn),
+            ctx_release: sym!(cg, c"CGContextRelease", CGContextReleaseFn),
+            cf_data_create_mutable: sym!(cf, c"CFDataCreateMutable", CFDataCreateMutableFn),
+            data_consumer_create: sym!(cg, c"CGDataConsumerCreateWithCFData", CGDataConsumerCreateFn),
+            data_consumer_release: sym!(cg, c"CGDataConsumerRelease", CGDPRelease),
+            pdf_ctx_create: sym!(cg, c"CGPDFContextCreate", CGPDFContextCreateFn),
+            pdf_begin_page: sym!(cg, c"CGPDFContextBeginPage", CGPDFContextPageFn),
+            pdf_end_page: sym!(cg, c"CGPDFContextEndPage", CGContextVoidFn),
+            pdf_close: sym!(cg, c"CGPDFContextClose", CGContextVoidFn),
+            cf_data_get_length: sym!(cf, c"CFDataGetLength", CFDataGetLengthFn),
+            cf_data_get_byte_ptr: sym!(cf, c"CFDataGetBytePtr", CFDataGetBytePtrFn),
             srgb_name: srgb_name_ptr,
         })
     })

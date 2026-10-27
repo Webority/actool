@@ -701,7 +701,7 @@ impl AssetCatalog {
                 renditions.push(vec_rend);
 
                 if svg_raster::has_coresvg() {
-                    let (svg_w, svg_h) = svg_raster::parse_svg_dimensions(&svg_data);
+                    let (svg_w, svg_h) = svg_raster::parse_svg_dimensions(&svg_data)?;
                     if svg_w > 0 && svg_h > 0 {
                         for raster_scale in [1u16, 2] {
                             let pixel_data = svg_raster::rasterize_svg(
@@ -876,8 +876,7 @@ impl AssetCatalog {
                 renditions.push(vec_rend);
 
                 if svg_raster::has_coresvg() && point_w > 0 {
-                    let (mut svg_w, mut svg_h) =
-                        svg_raster::parse_svg_dimensions(&svg_data);
+                    let (mut svg_w, mut svg_h) = svg_raster::parse_svg_dimensions(&svg_data)?;
                     if svg_w == 0 {
                         svg_w = point_w;
                         svg_h = point_w;
@@ -995,7 +994,9 @@ impl AssetCatalog {
         let mut groups: Vec<(u16, u16)> = sizes_by_group.keys().copied().collect();
         groups.sort_unstable();
         for (idiom, subtype) in groups {
-            let mut sizes = sizes_by_group.shift_remove(&(idiom, subtype)).unwrap();
+            let mut sizes = sizes_by_group
+                .shift_remove(&(idiom, subtype))
+                .ok_or_else(|| anyhow!("icon size group missing"))?;
             // Apple lists multisize entries in ascending point-size order; our
             // discovery order is filesystem-defined ("128" sorts before "16").
             sizes.sort_unstable();
@@ -1034,7 +1035,7 @@ impl AssetCatalog {
         let name = item.file_stem().unwrap_or_default().to_string_lossy().to_string();
         let facet_name = format!("{namespace}{name}");
         let ident = self.get_identifier(&facet_name);
-        let re = regex::Regex::new(r"^icon_(\d+)x(\d+)(?:@(\d+)x)?\.png$").unwrap();
+        let re = regex::Regex::new(r"^icon_(\d+)x(\d+)(?:@(\d+)x)?\.png$")?;
         let mut icon_renditions: Vec<u32> = Vec::new();
         let mut entries: Vec<PathBuf> = match fs::read_dir(item) {
             Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.path())).collect(),
@@ -1045,7 +1046,11 @@ impl AssetCatalog {
             if !img_file.is_file() {
                 continue;
             }
-            let fname = img_file.file_name().unwrap().to_string_lossy().to_string();
+            let fname = img_file
+                .file_name()
+                .ok_or_else(|| anyhow!("icon set entry has no file name"))?
+                .to_string_lossy()
+                .to_string();
             let Some(cap) = re.captures(&fname) else {
                 continue;
             };
