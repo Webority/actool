@@ -15,6 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+dunce = "1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 png = "0.18"
 lzfse = "0.2"
@@ -31,3 +32,10 @@ regex = "1"
 
 [dev-dependencies]
 tempfile = "3"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+undocumented_unsafe_blocks = "deny"
+dbg_macro = "deny"
+todo = "deny"

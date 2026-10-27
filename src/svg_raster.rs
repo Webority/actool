@@ -121,12 +121,14 @@ mod imp {
         srgb_name: *mut c_void,
     }
 
-    // Function pointers live inside Apple system libs for the process lifetime.
+    // SAFETY: the fields are function pointers into framework code that stays mapped for the process lifetime, and `srgb_name` is an immutable CFString global, so sharing the table only reads.
     unsafe impl Sync for CoreSvgSyms {}
+    // SAFETY: the fields hold no owned or mutable state, so moving the table between threads is sound.
     unsafe impl Send for CoreSvgSyms {}
 
     fn load_syms() -> Option<&'static CoreSvgSyms> {
         static CELL: OnceLock<Option<CoreSvgSyms>> = OnceLock::new();
+        // SAFETY: each handle is null-checked before any `dlsym` call, each symbol is null-checked before it is transmuted, and the `kCGColorSpaceSRGB` address is null-checked before it is dereferenced; the handles are never closed.
         CELL.get_or_init(|| unsafe {
             let cg = dlopen(
                 c"/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics".as_ptr(),
@@ -149,7 +151,7 @@ mod imp {
                     if p.is_null() {
                         return None;
                     }
-                    std::mem::transmute::<_, $ty>(p)
+                    std::mem::transmute::<*mut c_void, $ty>(p)
                 }};
             }
             let srgb_name_ptr = {
@@ -186,7 +188,10 @@ mod imp {
         let syms = load_syms().ok_or_else(|| anyhow!("CoreSVG framework not available"))?;
         let pixel_w = (width * scale) as usize;
         let pixel_h = (height * scale) as usize;
+        // Read before any CoreFoundation object exists, so a malformed size returns without leaking them.
+        let (nw, nh) = parse_svg_dimensions(svg_data)?;
 
+        // SAFETY: every object is null-checked before use; `cf_data` copies `svg_data` in `CFDataCreate`, so the borrowed slice only needs to live through that call; `ctx` is created with a null data pointer, so CoreGraphics owns a `pixel_w * pixel_h * 4` byte store with `pixel_w * 4` bytes per row, which is the length copied out below.
         unsafe {
             let cf_data =
                 (syms.cf_data_create)(std::ptr::null(), svg_data.as_ptr(), svg_data.len());
@@ -233,7 +238,6 @@ mod imp {
             // top-left corner instead of scaled). When the requested width matches
             // the SVG's native size this reduces to the integer `scale` and stays
             // byte-identical to the old behaviour.
-            let (nw, nh) = parse_svg_dimensions(svg_data)?;
             let (nw, nh) = if nw > 0 && nh > 0 {
                 (nw, nh)
             } else {
@@ -246,6 +250,13 @@ mod imp {
             }
             (syms.ctx_draw_svg)(ctx, svg_doc);
             let data_ptr = (syms.bitmap_get_data)(ctx);
+            if data_ptr.is_null() {
+                (syms.ctx_release)(ctx);
+                (syms.cs_release)(cs);
+                (syms.cf_release)(svg_doc);
+                (syms.cf_release)(cf_data);
+                return Err(anyhow!("CGBitmapContextGetData returned no buffer"));
+            }
             let byte_len = pixel_w * pixel_h * 4;
             let data = std::slice::from_raw_parts(data_ptr, byte_len).to_vec();
 

@@ -307,7 +307,7 @@ pub fn compile_icon_bundle(
         platform,
         min_deploy,
     )?;
-    output_files.push(fs::canonicalize(&car_path).unwrap_or(car_path));
+    output_files.push(dunce::canonicalize(&car_path).unwrap_or(car_path));
 
     // Apple's empirical rule for `.icon` bundles: emit `<icon_name>.icns`
     // and a populated partial plist (CFBundleIconFile/CFBundleIconName)
@@ -319,7 +319,7 @@ pub fn compile_icon_bundle(
         let icns_path = output_dir.join(format!("{icon_name}.icns"));
         crate::icns::create_icns(&icon_images, &icns_path)?;
         if icns_path.exists() {
-            output_files.push(fs::canonicalize(&icns_path).unwrap_or(icns_path));
+            output_files.push(dunce::canonicalize(&icns_path).unwrap_or(icns_path));
         }
     }
 
@@ -333,7 +333,7 @@ pub fn compile_icon_bundle(
         } else {
             write_empty_partial_plist(path)?;
         }
-        output_files.push(fs::canonicalize(path).unwrap_or(path.to_path_buf()));
+        output_files.push(dunce::canonicalize(path).unwrap_or(path.to_path_buf()));
     }
     Ok(output_files)
 }
@@ -1272,14 +1272,18 @@ fn build_icon_car(
             // go through LZFSE.
             let force_lzfse = matches!(&pf, b"BGRA" | b" 8AG" | b"61AG");
             let atlas_csi = car::build_packed_asset_csi(
-                &atlas_name,
-                atlas.width,
-                atlas.height,
-                2,
-                &pf,
-                &atlas.pixel_data,
-                min_deploy,
-                platform,
+                &car::PackedAsset {
+                    name: &atlas_name,
+                    width: atlas.width,
+                    height: atlas.height,
+                    scale: 2,
+                    pixel_format: &pf,
+                    pixel_data: &atlas.pixel_data,
+                },
+                &car::DeployTarget {
+                    min_deploy,
+                    platform,
+                },
                 force_lzfse,
             );
             renditions.push(Rendition {
@@ -1310,12 +1314,14 @@ fn build_icon_car(
                     img.height,
                     img.scale as u16,
                     &pf,
-                    img.x,
-                    inlk_y,
                     0,
-                    0,
-                    0,
-                    0,
+                    &car::AtlasPlacement {
+                        x: img.x,
+                        y: inlk_y,
+                        atlas_identifier: 0,
+                        atlas_dim1: 0,
+                        idiom: 0,
+                    },
                 );
                 renditions.push(Rendition {
                     name: img.name.clone(),

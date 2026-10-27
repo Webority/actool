@@ -229,14 +229,18 @@ pub fn compile_catalog_with_icons(
             );
 
             let atlas_csi = car::build_packed_asset_csi(
-                &atlas_name,
-                atlas.width,
-                atlas.height,
-                *scale,
-                fmt,
-                &atlas.pixel_data,
-                min_deploy,
-                platform,
+                &car::PackedAsset {
+                    name: &atlas_name,
+                    width: atlas.width,
+                    height: atlas.height,
+                    scale: *scale,
+                    pixel_format: fmt,
+                    pixel_data: &atlas.pixel_data,
+                },
+                &car::DeployTarget {
+                    min_deploy,
+                    platform,
+                },
                 force_lzfse,
             );
             all_entries.push((atlas_key, atlas_csi));
@@ -263,10 +267,6 @@ pub fn compile_catalog_with_icons(
                     img.height,
                     *scale,
                     fmt,
-                    img.x,
-                    inlk_y,
-                    sprite_atlas_id,
-                    dim1_counter,
                     {
                         let mut f = (img.template_rendering_intent as u32) << 2;
                         if img.is_svg_rasterization {
@@ -274,7 +274,13 @@ pub fn compile_catalog_with_icons(
                         }
                         f
                     },
-                    img.idiom as u16,
+                    &car::AtlasPlacement {
+                        x: img.x,
+                        y: inlk_y,
+                        atlas_identifier: sprite_atlas_id,
+                        atlas_dim1: dim1_counter,
+                        idiom: img.idiom as u16,
+                    },
                 );
                 all_entries.push((ref_key, ref_csi));
             }
@@ -400,7 +406,7 @@ pub fn compile_catalog_with_icons(
         let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("jpg");
         let dest = output_dir.join(format!("{imageset_stem}.{ext}"));
         fs::copy(src, &dest)?;
-        output_files.push(fs::canonicalize(&dest).unwrap_or(dest));
+        output_files.push(dunce::canonicalize(&dest).unwrap_or(dest));
     }
 
     if let Some(icon_name) = app_icon {
@@ -419,7 +425,7 @@ pub fn compile_catalog_with_icons(
                             fs::copy(&loose.src, &dest)?;
                         }
                     }
-                    output_files.push(fs::canonicalize(&dest).unwrap_or(dest));
+                    output_files.push(dunce::canonicalize(&dest).unwrap_or(dest));
                 }
             }
         } else if standalone_icon_behavior != "none" {
@@ -427,13 +433,13 @@ pub fn compile_catalog_with_icons(
             if !icons.is_empty() {
                 let icns_path = output_dir.join(format!("{icon_name}.icns"));
                 icns::create_icns(&icons, &icns_path)?;
-                output_files.push(fs::canonicalize(&icns_path).unwrap_or(icns_path));
+                output_files.push(dunce::canonicalize(&icns_path).unwrap_or(icns_path));
             }
         }
     }
 
     if produce_car {
-        output_files.push(fs::canonicalize(&car_path).unwrap_or(car_path));
+        output_files.push(dunce::canonicalize(&car_path).unwrap_or(car_path));
     }
 
     if let Some(path) = info_plist_path {
@@ -460,7 +466,7 @@ pub fn compile_catalog_with_icons(
                 &locales,
             )?;
         }
-        output_files.push(fs::canonicalize(path).unwrap_or(path.to_path_buf()));
+        output_files.push(dunce::canonicalize(path).unwrap_or(path.to_path_buf()));
     }
 
     Ok(output_files)

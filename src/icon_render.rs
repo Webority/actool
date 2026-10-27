@@ -102,12 +102,15 @@ struct Syms {
     ctx_release: FnRelease,
     cs_release: FnRelease,
 }
+// SAFETY: every field is a function pointer written once inside `OnceLock` and only read afterwards.
 unsafe impl Sync for Syms {}
+// SAFETY: the fields are plain code addresses with no owned or mutable state, so moving the table between threads is sound.
 unsafe impl Send for Syms {}
 
 #[cfg(target_os = "macos")]
 fn syms() -> Option<&'static Syms> {
     static CELL: OnceLock<Option<Syms>> = OnceLock::new();
+    // SAFETY: the CoreGraphics handle is null-checked before any `dlsym` call, each symbol is null-checked before it is transmuted, and the handle is never closed, so every stored pointer stays valid.
     CELL.get_or_init(|| unsafe {
         let cg = dlopen(
             c"/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics".as_ptr(),
@@ -122,7 +125,7 @@ fn syms() -> Option<&'static Syms> {
                 if p.is_null() {
                     return None;
                 }
-                std::mem::transmute::<_, $ty>(p)
+                std::mem::transmute::<*mut c_void, $ty>(p)
             }};
         }
         Some(Syms {
@@ -229,13 +232,17 @@ const SQUIRCLE_N: f64 = 5.0;
 /// Build the icon-shape squircle as a polygon CGPath inscribed in `rect` (a
 /// square). The superellipse is sampled densely enough that the polygon is
 /// sub-pixel at the rendition size. Caller owns the returned path.
+///
+/// # Safety
+///
+/// `s` must come from `syms()`, so every function pointer in it is resolved and non-null. The caller releases the returned path with `CGPathRelease`.
 unsafe fn build_squircle_path(s: &Syms, rect: CGRect) -> *mut c_void {
     let a = rect.size.width / 2.0;
     let cx = rect.origin.x + a;
     let cy = rect.origin.y + a;
     // Curvature concentrates near the corners; sample by edge length so even
     // small renditions stay smooth there.
-    let steps = ((rect.size.width as usize).max(256)).min(2048);
+    let steps = (rect.size.width as usize).clamp(256, 2048);
     let path = (s.path_create_mutable)();
     let e = 2.0 / SQUIRCLE_N;
     for i in 0..steps {
@@ -271,8 +278,12 @@ pub fn composite_icon(
     let margin = pixel_size as f64 * MARGIN_RATIO;
     let content = pixel_size as f64 - 2.0 * margin;
 
+    // SAFETY: `cs` is created by `device_rgb` and released on every path; `ctx` is null-checked before use and created with `size` rows of `size * 4` bytes, which is the length `bitmap_data` is read with; `layer_bgra` is length-checked to `size * size * 4` above, which is the length the data provider is given.
     unsafe {
         let cs = (s.device_rgb)();
+        if cs.is_null() {
+            return None;
+        }
         const PREMUL_FIRST: u32 = 2;
         const LE32: u32 = 2 << 12;
         let info = PREMUL_FIRST | LE32;
@@ -292,15 +303,21 @@ pub fn composite_icon(
                 height: content,
             },
         };
+        // SAFETY: `s` comes from `syms()`, and `rect` is a plain value; the returned path is released by `path_release` later in this block.
         let path = build_squircle_path(s, rect);
+        if path.is_null() {
+            (s.ctx_release)(ctx);
+            (s.cs_release)(cs);
+            return None;
+        }
 
         // Drop shadow: fill the squircle opaque with the shadow set, so the
         // blurred copy bleeds into the margin. The opaque fill inside is then
         // overpainted by the gradient. Done before clipping (the shadow lives
         // outside the shape).
-        if let Some(sh) = shadow {
+        let shadow_color = shadow.map(|sh| (sh, (s.color_create)(cs, sh.color.as_ptr())));
+        if let Some((sh, color)) = shadow_color.filter(|(_, c)| !c.is_null()) {
             (s.ctx_save)(ctx);
-            let color = (s.color_create)(cs, sh.color.as_ptr());
             // Context is bottom-up, so a downward screen offset is negative y.
             let off = CGSize {
                 width: sh.offset[0],
@@ -331,6 +348,12 @@ pub fn composite_icon(
         ];
         let locs: [c_double; 2] = [0.0, 1.0];
         let grad = (s.grad_create)(cs, comps.as_ptr(), locs.as_ptr(), 2);
+        if grad.is_null() {
+            (s.path_release)(path);
+            (s.ctx_release)(ctx);
+            (s.cs_release)(cs);
+            return None;
+        }
         // icon.json orientation y and this context share a top-down y axis
         // (y=1 is the top edge), matching the layer draw — map straight through.
         let to_ctx = |p: [f32; 2]| CGPoint {
@@ -378,7 +401,14 @@ pub fn composite_icon(
         }
         (s.provider_release)(provider);
 
-        let mut data = std::slice::from_raw_parts((s.bitmap_data)(ctx), size * size * 4).to_vec();
+        let bitmap = (s.bitmap_data)(ctx);
+        if bitmap.is_null() {
+            (s.path_release)(path);
+            (s.ctx_release)(ctx);
+            (s.cs_release)(cs);
+            return None;
+        }
+        let mut data = std::slice::from_raw_parts(bitmap, size * size * 4).to_vec();
         (s.path_release)(path);
         (s.ctx_release)(ctx);
         (s.cs_release)(cs);

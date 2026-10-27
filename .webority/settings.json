@@ -20,7 +20,7 @@
     "deploy": "on-word"
   },
   "commands": {
-    "verify": "cargo check -q"
+    "verify": "cargo fmt --all --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked -q"
   },
   "git": {
     "prPolicy": "release-only",

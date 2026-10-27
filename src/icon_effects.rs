@@ -5,6 +5,7 @@
 //!   * a plain field — `"shadow": {"kind": "neutral", "opacity": 1}`
 //!   * an appearance-keyed list — `"shadow-specializations": [{"value": …},
 //!     {"appearance": "dark", "value": …}, {"appearance": "tinted", …}]`
+//!
 //! The list, when present, supersedes the plain field; an entry with no
 //! `appearance` is the default (light) value and the fallback for any
 //! appearance lacking its own entry.

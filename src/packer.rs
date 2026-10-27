@@ -304,14 +304,15 @@ fn pack_shelf_atlas(
     overflow
 }
 
+type RenditionGroups = indexmap::IndexMap<([u8; 4], u16, u16, u16), Vec<usize>>;
+type PackGroup = ([u8; 4], u16, Vec<usize>);
+
 /// Group renditions into packable groups and inline-only renditions.
 ///
 /// Returns `(pack_groups, inline_renditions)` where each pack group is
 /// `(pixel_format, scale, rendition_indices)` — the caller keeps
 /// ownership of the renditions vector, so we pass indices back.
-pub fn group_for_packing(
-    renditions: &[crate::car::Rendition],
-) -> (Vec<([u8; 4], u16, Vec<usize>)>, Vec<usize>) {
+pub fn group_for_packing(renditions: &[crate::car::Rendition]) -> (Vec<PackGroup>, Vec<usize>) {
     use crate::car;
 
     const ICON_INLINE_THRESHOLD: u32 = 256;
@@ -322,8 +323,7 @@ pub fn group_for_packing(
     // group key: (pixel_format, scale, sprite_atlas_id, idiom) -> indices.
     // Idiom is part of the key so iOS atlases never mix idioms (Apple emits a
     // separate atlas per idiom); it's 0 on macOS, leaving that grouping intact.
-    let mut groups: indexmap::IndexMap<([u8; 4], u16, u16, u16), Vec<usize>> =
-        indexmap::IndexMap::new();
+    let mut groups: RenditionGroups = indexmap::IndexMap::new();
     let mut force_inline: Vec<usize> = Vec::new();
 
     for (i, rend) in renditions.iter().enumerate() {

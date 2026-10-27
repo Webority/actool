@@ -48,7 +48,21 @@ fn car_helpers_match_python() {
         "color"
     );
     assert_eq!(
-        car::build_packed_image_csi("img_1", 32, 32, 2, b"BGRA", 4, 6, 0, 0, 0, 0),
+        car::build_packed_image_csi(
+            "img_1",
+            32,
+            32,
+            2,
+            b"BGRA",
+            0,
+            &car::AtlasPlacement {
+                x: 4,
+                y: 6,
+                atlas_identifier: 0,
+                atlas_dim1: 0,
+                idiom: 0,
+            },
+        ),
         py_packed,
         "packed"
     );

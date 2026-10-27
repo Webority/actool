@@ -51,6 +51,7 @@ fn pixfmt_to_dm(pixfmt: &[u8]) -> Option<u32> {
 #[cfg(target_os = "macos")]
 fn encode_fn() -> Option<EncodeFn> {
     static FN: OnceLock<Option<usize>> = OnceLock::new();
+    // SAFETY: the handle and the symbol are null-checked before the address is kept, and the handle is never closed, so the stored address stays valid for the process lifetime.
     let addr = FN.get_or_init(|| unsafe {
         let path = c"/System/Library/Frameworks/Accelerate.framework/Accelerate";
         let handle = dlopen(path.as_ptr(), RTLD_LAZY);
@@ -65,6 +66,7 @@ fn encode_fn() -> Option<EncodeFn> {
             Some(sym as usize)
         }
     });
+    // SAFETY: `a` is the address `dlsym` returned for a non-null symbol, and `usize` and a function pointer have the same size.
     addr.map(|a| unsafe { std::mem::transmute::<usize, EncodeFn>(a) })
 }
 
@@ -101,14 +103,17 @@ pub fn encode(pixel_data: &[u8], pixel_format: &[u8], width: u32, height: u32) -
     };
     let mut out_ptr: *mut c_void = ptr::null_mut();
 
+    // SAFETY: `vbuf.data` points into `src_copy`, which lives past this call and holds `pixel_data.len()` bytes, at least `height * row_bytes`; `vbuf`, `opts` and `out_ptr` are live locals that the call may write.
     let encoded_size = unsafe { fn_ptr(&mut vbuf, dm_fmt, &mut opts, &mut out_ptr) };
 
     if encoded_size == 0 || out_ptr.is_null() {
         return None;
     }
 
+    // SAFETY: `out_ptr` is non-null, and the encoder reports `encoded_size` as the byte length of the buffer at `out_ptr`, which stays allocated until it is freed below.
     let result = unsafe { std::slice::from_raw_parts(out_ptr as *const u8, encoded_size).to_vec() };
     #[cfg(target_os = "macos")]
+    // SAFETY: `out_ptr` is non-null and freed exactly once, after its bytes were copied out; the encoder allocates it with the C allocator, which the undocumented API is assumed to do.
     unsafe {
         free(out_ptr);
     }

@@ -460,33 +460,48 @@ fn gzip_compress(data: &[u8]) -> Option<Vec<u8>> {
     enc.finish().ok()
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct DeployTarget<'a> {
+    pub min_deploy: &'a str,
+    pub platform: &'a str,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CompressOptions {
+    pub allow_dmp2: bool,
+    pub dmp2_inline: bool,
+    pub is_opaque: bool,
+}
+
 pub fn compress_data(
     pixel_data: &[u8],
     pixel_format: &[u8],
     width: u32,
     height: u32,
-    min_deploy: &str,
-    platform: &str,
-    allow_dmp2: bool,
-    dmp2_inline: bool,
-    is_opaque: bool,
+    target: &DeployTarget,
+    options: CompressOptions,
 ) -> Vec<u8> {
-    let deploy_ver = parse_version(min_deploy);
+    let deploy_ver = parse_version(target.min_deploy);
 
-    if allow_dmp2 {
-        let dmp2_min = min_dmp2_version(platform);
+    if options.allow_dmp2 {
+        let dmp2_min = min_dmp2_version(target.platform);
         if deploy_ver >= dmp2_min && pixel_data.len() > 256 {
             if let Some(dmp2_data) = deepmap2::encode(pixel_data, pixel_format, width, height) {
-                let celm_ver = if is_opaque { 2 } else { 0 };
-                return deepmap2::make_celm_dmp2(&dmp2_data, pixel_format, dmp2_inline, celm_ver);
+                let celm_ver = if options.is_opaque { 2 } else { 0 };
+                return deepmap2::make_celm_dmp2(
+                    &dmp2_data,
+                    pixel_format,
+                    options.dmp2_inline,
+                    celm_ver,
+                );
             }
         }
     }
 
-    let lzfse_min = min_lzfse_version(platform);
+    let lzfse_min = min_lzfse_version(target.platform);
     if deploy_ver >= lzfse_min && pixel_data.len() > 256 {
         if let Some(kcbc) = compress_kcbc(pixel_data, height) {
-            let celm_ver: u32 = if is_opaque { 3 } else { 1 };
+            let celm_ver: u32 = if options.is_opaque { 3 } else { 1 };
             let mut out = Vec::new();
             out.extend_from_slice(b"MLEC");
             out.extend_from_slice(&u32::to_le_bytes(celm_ver));
@@ -533,57 +548,44 @@ pub fn compress_data(
     out
 }
 
-pub fn make_csi_header(
-    width: u32,
-    height: u32,
-    scale_factor: u32,
-    pixel_format: &[u8],
-    layout: u16,
-    name: &str,
-    rendition_flags: u32,
-    colorspace_id: u32,
-) -> Vec<u8> {
+#[derive(Clone, Copy, Debug)]
+pub struct CsiHeader<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub scale_factor: u32,
+    pub pixel_format: &'a [u8],
+    pub layout: u16,
+    pub name: &'a str,
+    pub rendition_flags: u32,
+    pub colorspace_id: u32,
+}
+
+pub fn make_csi_header(header: &CsiHeader) -> Vec<u8> {
     let mut buf = vec![0u8; 184];
     buf[0..4].copy_from_slice(b"ISTC");
     buf[4..8].copy_from_slice(&u32::to_le_bytes(1));
-    buf[8..12].copy_from_slice(&u32::to_le_bytes(rendition_flags));
-    buf[12..16].copy_from_slice(&u32::to_le_bytes(width));
-    buf[16..20].copy_from_slice(&u32::to_le_bytes(height));
-    buf[20..24].copy_from_slice(&u32::to_le_bytes(scale_factor));
-    buf[24..28].copy_from_slice(pixel_format);
-    buf[28..32].copy_from_slice(&u32::to_le_bytes(colorspace_id & 0xF));
+    buf[8..12].copy_from_slice(&u32::to_le_bytes(header.rendition_flags));
+    buf[12..16].copy_from_slice(&u32::to_le_bytes(header.width));
+    buf[16..20].copy_from_slice(&u32::to_le_bytes(header.height));
+    buf[20..24].copy_from_slice(&u32::to_le_bytes(header.scale_factor));
+    buf[24..28].copy_from_slice(header.pixel_format);
+    buf[28..32].copy_from_slice(&u32::to_le_bytes(header.colorspace_id & 0xF));
     buf[32..36].copy_from_slice(&u32::to_le_bytes(0));
-    buf[36..38].copy_from_slice(&u16::to_le_bytes(layout));
+    buf[36..38].copy_from_slice(&u16::to_le_bytes(header.layout));
     buf[38..40].copy_from_slice(&u16::to_le_bytes(0));
-    let name_bytes = name.as_bytes();
+    let name_bytes = header.name.as_bytes();
     let n = name_bytes.len().min(127);
     buf[40..40 + n].copy_from_slice(&name_bytes[..n]);
     buf
 }
 
 pub fn build_csi(
-    width: u32,
-    height: u32,
-    scale_factor: u32,
-    pixel_format: &[u8],
-    layout: u16,
-    name: &str,
+    header: &CsiHeader,
     tlv_data: &[u8],
     rendition_data: &[u8],
-    rendition_flags: u32,
-    colorspace_id: u32,
     bitmaplist_unknown: u32,
 ) -> Vec<u8> {
-    let mut header = make_csi_header(
-        width,
-        height,
-        scale_factor,
-        pixel_format,
-        layout,
-        name,
-        rendition_flags,
-        colorspace_id,
-    );
+    let mut header = make_csi_header(header);
     header[168..172].copy_from_slice(&u32::to_le_bytes(tlv_data.len() as u32));
     header[172..176].copy_from_slice(&u32::to_le_bytes(bitmaplist_unknown));
     header[176..180].copy_from_slice(&u32::to_le_bytes(0));
@@ -666,21 +668,21 @@ pub fn make_bytes_per_row_tlv(width: u32, pixel_format: &[u8], aligned: bool) ->
     out
 }
 
-pub fn make_inlk_tlv(
-    x: u32,
-    y: u32,
-    width: u32,
-    height: u32,
-    scale: u16,
-    atlas_identifier: u16,
-    atlas_dim1: u16,
-    idiom: u16,
-) -> Vec<u8> {
+#[derive(Clone, Copy, Debug)]
+pub struct AtlasPlacement {
+    pub x: u32,
+    pub y: u32,
+    pub atlas_identifier: u16,
+    pub atlas_dim1: u16,
+    pub idiom: u16,
+}
+
+pub fn make_inlk_tlv(width: u32, height: u32, scale: u16, placement: &AtlasPlacement) -> Vec<u8> {
     let mut inlk = Vec::new();
     inlk.extend_from_slice(b"KLNI");
     inlk.extend_from_slice(&u32::to_le_bytes(0));
-    inlk.extend_from_slice(&u32::to_le_bytes(x));
-    inlk.extend_from_slice(&u32::to_le_bytes(y));
+    inlk.extend_from_slice(&u32::to_le_bytes(placement.x));
+    inlk.extend_from_slice(&u32::to_le_bytes(placement.y));
     inlk.extend_from_slice(&u32::to_le_bytes(width));
     inlk.extend_from_slice(&u32::to_le_bytes(height));
 
@@ -690,21 +692,21 @@ pub fn make_inlk_tlv(
     attr.extend_from_slice(&u16::to_le_bytes(ELEMENT_PACKED));
     attr.extend_from_slice(&u16::to_le_bytes(2));
     attr.extend_from_slice(&u16::to_le_bytes(PART_REGULAR));
-    if atlas_dim1 != 0 {
+    if placement.atlas_dim1 != 0 {
         attr.extend_from_slice(&u16::to_le_bytes(8));
-        attr.extend_from_slice(&u16::to_le_bytes(atlas_dim1));
+        attr.extend_from_slice(&u16::to_le_bytes(placement.atlas_dim1));
     }
-    if atlas_identifier != 0 {
+    if placement.atlas_identifier != 0 {
         attr.extend_from_slice(&u16::to_le_bytes(17));
-        attr.extend_from_slice(&u16::to_le_bytes(atlas_identifier));
+        attr.extend_from_slice(&u16::to_le_bytes(placement.atlas_identifier));
     }
     attr.extend_from_slice(&u16::to_le_bytes(12));
     attr.extend_from_slice(&u16::to_le_bytes(scale));
     // iOS atlases are keyed per idiom; the link must name the atlas idiom
     // (attr 15) or CUICatalog can't resolve the packed image to its atlas.
-    if idiom != 0 {
+    if placement.idiom != 0 {
         attr.extend_from_slice(&u16::to_le_bytes(15));
-        attr.extend_from_slice(&u16::to_le_bytes(idiom));
+        attr.extend_from_slice(&u16::to_le_bytes(placement.idiom));
     }
     attr.extend_from_slice(&u16::to_le_bytes(0));
 
@@ -723,57 +725,58 @@ pub fn build_packed_image_csi(
     height: u32,
     scale: u16,
     pixel_format: &[u8],
-    x: u32,
-    y: u32,
-    atlas_identifier: u16,
-    atlas_dim1: u16,
     rendition_flags: u32,
-    idiom: u16,
+    placement: &AtlasPlacement,
 ) -> Vec<u8> {
     let scale_factor = scale as u32 * 100;
     let mut tlv = Vec::new();
     tlv.extend(make_slices_tlv(width, height));
     tlv.extend(make_metrics_tlv(width, height));
-    tlv.extend(make_inlk_tlv(
-        x,
-        y,
-        width,
-        height,
-        scale,
-        atlas_identifier,
-        atlas_dim1,
-        idiom,
-    ));
+    tlv.extend(make_inlk_tlv(width, height, scale, placement));
     tlv.extend(make_blend_opacity_tlv());
     tlv.extend(make_exif_orientation_tlv(1));
 
     let cs_id = colorspace_for_pixel_format(pixel_format);
     build_csi(
-        width,
-        height,
-        scale_factor,
-        pixel_format,
-        LAYOUT_PACKED_IMAGE,
-        name,
+        &CsiHeader {
+            width,
+            height,
+            scale_factor,
+            pixel_format,
+            layout: LAYOUT_PACKED_IMAGE,
+            name,
+            rendition_flags,
+            colorspace_id: cs_id,
+        },
         &tlv,
         &[],
-        rendition_flags,
-        cs_id,
         1,
     )
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct PackedAsset<'a> {
+    pub name: &'a str,
+    pub width: u32,
+    pub height: u32,
+    pub scale: u16,
+    pub pixel_format: &'a [u8],
+    pub pixel_data: &'a [u8],
+}
+
 pub fn build_packed_asset_csi(
-    name: &str,
-    width: u32,
-    height: u32,
-    scale: u16,
-    pixel_format: &[u8],
-    pixel_data: &[u8],
-    min_deploy: &str,
-    platform: &str,
+    asset: &PackedAsset,
+    target: &DeployTarget,
     force_lzfse: bool,
 ) -> Vec<u8> {
+    let PackedAsset {
+        name,
+        width,
+        height,
+        scale,
+        pixel_format,
+        pixel_data,
+    } = *asset;
     let scale_factor = scale as u32 * 100;
     let mut tlv = Vec::new();
     tlv.extend(make_slices_tlv(0, 0));
@@ -786,11 +789,12 @@ pub fn build_packed_asset_csi(
         pixel_format,
         width,
         height,
-        min_deploy,
-        platform,
-        use_dmp2,
-        false,
-        false,
+        target,
+        CompressOptions {
+            allow_dmp2: use_dmp2,
+            dmp2_inline: false,
+            is_opaque: false,
+        },
     );
     let actual_comp = if rend_data.len() >= 12 {
         u32::from_le_bytes([rend_data[8], rend_data[9], rend_data[10], rend_data[11]])
@@ -809,16 +813,18 @@ pub fn build_packed_asset_csi(
 
     let cs_id = colorspace_for_pixel_format(pixel_format);
     build_csi(
-        width,
-        height,
-        scale_factor,
-        pixel_format,
-        LAYOUT_NAME_LIST,
-        name,
+        &CsiHeader {
+            width,
+            height,
+            scale_factor,
+            pixel_format,
+            layout: LAYOUT_NAME_LIST,
+            name,
+            rendition_flags: 0,
+            colorspace_id: cs_id,
+        },
         &tlv,
         &rend_data,
-        0,
-        cs_id,
         1,
     )
 }
@@ -894,16 +900,18 @@ pub fn build_iconstack_csi(name: &str, dim: u32, layers: &[LayerRef]) -> Vec<u8>
 
     let trailer = make_dwar_trailer();
     build_csi(
-        dim,
-        dim,
-        100,
-        PIXELFMT_DATA,
-        LAYOUT_ICONSTACK,
-        name,
+        &CsiHeader {
+            width: dim,
+            height: dim,
+            scale_factor: 100,
+            pixel_format: PIXELFMT_DATA,
+            layout: LAYOUT_ICONSTACK,
+            name,
+            rendition_flags: 0,
+            colorspace_id: 0,
+        },
         &tlv,
         &trailer,
-        0,
-        0,
         1,
     )
 }
@@ -958,16 +966,18 @@ pub fn build_icongroup_csi(name: &str, child_dim: u32, layers: &[LayerRef]) -> V
 
     let trailer = make_dwar_trailer();
     build_csi(
-        0,
-        0,
-        100,
-        PIXELFMT_DATA,
-        LAYOUT_ICON_GROUP,
-        name,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 100,
+            pixel_format: PIXELFMT_DATA,
+            layout: LAYOUT_ICON_GROUP,
+            name,
+            rendition_flags: 0,
+            colorspace_id: 0,
+        },
         &tlv,
         &trailer,
-        0,
-        0,
         1,
     )
 }
@@ -1010,16 +1020,18 @@ pub fn build_icon_color_csi(name: &str, colorspace_id: u32, components: &[f64]) 
     tlv.extend(make_color_blend_opacity_tlv());
     tlv.extend(make_exif_orientation_tlv(1));
     build_csi(
-        0,
-        0,
-        0,
-        b"\x00\x00\x00\x00",
-        LAYOUT_COLOR,
-        name,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 0,
+            pixel_format: b"\x00\x00\x00\x00",
+            layout: LAYOUT_COLOR,
+            name,
+            rendition_flags: 0,
+            colorspace_id: 0,
+        },
         &tlv,
         &colr,
-        0,
-        0,
         1,
     )
 }
@@ -1055,16 +1067,18 @@ pub fn build_icon_gradient_csi(
     tlv.extend(make_color_blend_opacity_tlv());
     tlv.extend(make_exif_orientation_tlv(1));
     build_csi(
-        0,
-        0,
-        0,
-        b"\x00\x00\x00\x00",
-        LAYOUT_GRADIENT,
-        name,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 0,
+            pixel_format: b"\x00\x00\x00\x00",
+            layout: LAYOUT_GRADIENT,
+            name,
+            rendition_flags: 0,
+            colorspace_id: 0,
+        },
         &tlv,
         &grad,
-        0,
-        0,
         1,
     )
 }
@@ -1092,16 +1106,18 @@ pub fn build_color_csi(
     tlv.extend(make_exif_orientation_tlv(1));
 
     build_csi(
-        0,
-        0,
-        0,
-        b"\x00\x00\x00\x00",
-        LAYOUT_COLOR,
-        name,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 0,
+            pixel_format: b"\x00\x00\x00\x00",
+            layout: LAYOUT_COLOR,
+            name,
+            rendition_flags: 0,
+            colorspace_id: 0,
+        },
         &tlv,
         &colr,
-        0,
-        0,
         1,
     )
 }
@@ -1125,16 +1141,18 @@ pub fn build_sprite_atlas_metadata_csi(sprite_names: &[String]) -> Vec<u8> {
     }
 
     build_csi(
-        0,
-        0,
-        100,
-        b"\x00\x00\x00\x00",
-        LAYOUT_METADATA,
-        "CoreStructuredImage",
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 100,
+            pixel_format: b"\x00\x00\x00\x00",
+            layout: LAYOUT_METADATA,
+            name: "CoreStructuredImage",
+            rendition_flags: 0,
+            colorspace_id: 0,
+        },
         &tlv,
         &[],
-        0,
-        0,
         1,
     )
 }
@@ -1151,16 +1169,18 @@ pub fn build_data_csi(raw_data: &[u8]) -> Vec<u8> {
     tlv.extend(make_exif_orientation_tlv(1));
 
     build_csi(
-        0,
-        0,
-        0,
-        PIXELFMT_DATA,
-        LAYOUT_RAW_DATA,
-        "CoreStructuredImage",
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 0,
+            pixel_format: PIXELFMT_DATA,
+            layout: LAYOUT_RAW_DATA,
+            name: "CoreStructuredImage",
+            rendition_flags: 0,
+            colorspace_id: 1,
+        },
         &tlv,
         &rawd,
-        0,
-        1,
         1,
     )
 }
@@ -1177,16 +1197,18 @@ pub fn build_pdf_csi(filename: &str, pdf_data: &[u8]) -> Vec<u8> {
     tlv.extend(make_exif_orientation_tlv(1));
 
     build_csi(
-        0,
-        0,
-        0,
-        PIXELFMT_PDF,
-        LAYOUT_PDF,
-        filename,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 0,
+            pixel_format: PIXELFMT_PDF,
+            layout: LAYOUT_PDF,
+            name: filename,
+            rendition_flags: 0x04,
+            colorspace_id: 0,
+        },
         &tlv,
         &rawd,
-        0x04,
-        0,
         1,
     )
 }
@@ -1255,16 +1277,18 @@ pub fn build_jpeg_csi(filename: &str, jpeg_data: &[u8]) -> Vec<u8> {
     tlv.extend(make_exif_orientation_tlv(1));
 
     build_csi(
-        0,
-        0,
-        100,
-        PIXELFMT_JPEG,
-        LAYOUT_ONE_PART_SCALE,
-        filename,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 100,
+            pixel_format: PIXELFMT_JPEG,
+            layout: LAYOUT_ONE_PART_SCALE,
+            name: filename,
+            rendition_flags: 0x10,
+            colorspace_id: 0,
+        },
         &tlv,
         &rawd,
-        0x10,
-        0,
         1,
     )
 }
@@ -1285,16 +1309,18 @@ pub fn build_svg_csi(filename: &str, svg_data: &[u8]) -> Vec<u8> {
     tlv.extend(make_exif_orientation_tlv(1));
 
     build_csi(
-        0,
-        0,
-        0,
-        PIXELFMT_SVG,
-        LAYOUT_PDF,
-        filename,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 0,
+            pixel_format: PIXELFMT_SVG,
+            layout: LAYOUT_PDF,
+            name: filename,
+            rendition_flags: 0x04,
+            colorspace_id: 0,
+        },
         &tlv,
         &rawd,
-        0x04,
-        0,
         1,
     )
 }
@@ -1514,11 +1540,15 @@ impl Rendition {
                 &self.pixel_format,
                 self.width,
                 self.height,
-                &self.min_deploy,
-                &self.platform,
-                use_dmp2,
-                false,
-                opaque,
+                &DeployTarget {
+                    min_deploy: &self.min_deploy,
+                    platform: &self.platform,
+                },
+                CompressOptions {
+                    allow_dmp2: use_dmp2,
+                    dmp2_inline: false,
+                    is_opaque: opaque,
+                },
             );
             let actual_comp = if rend_data.len() >= 12 {
                 u32::from_le_bytes([rend_data[8], rend_data[9], rend_data[10], rend_data[11]])
@@ -1547,16 +1577,18 @@ impl Rendition {
         }
 
         build_csi(
-            self.width,
-            self.height,
-            scale_factor,
-            &self.pixel_format,
-            self.layout,
-            &self.name,
+            &CsiHeader {
+                width: self.width,
+                height: self.height,
+                scale_factor,
+                pixel_format: &self.pixel_format,
+                layout: self.layout,
+                name: &self.name,
+                rendition_flags: flags,
+                colorspace_id: self.colorspace_id,
+            },
             &tlv,
             &rend_data,
-            flags,
-            self.colorspace_id,
             if self.pixel_data.is_empty() { 0 } else { 1 },
         )
     }
@@ -1591,16 +1623,18 @@ pub fn build_multisize_rendition(
     tlv.extend(make_exif_orientation_tlv(1));
 
     let csi = build_csi(
-        0,
-        0,
-        0,
-        b"\x00\x00\x00\x00",
-        LAYOUT_MULTISIZE_IMAGE,
-        name,
+        &CsiHeader {
+            width: 0,
+            height: 0,
+            scale_factor: 0,
+            pixel_format: b"\x00\x00\x00\x00",
+            layout: LAYOUT_MULTISIZE_IMAGE,
+            name,
+            rendition_flags: 0,
+            colorspace_id: 0,
+        },
         &tlv,
         &msis,
-        0,
-        0,
         1,
     );
 
@@ -1708,7 +1742,19 @@ mod tests {
     #[test]
     fn compress_data_uncompressed_small() {
         let out = compress_data(
-            &[0u8; 16], b"BGRA", 2, 2, "10.11", "macosx", false, false, false,
+            &[0u8; 16],
+            b"BGRA",
+            2,
+            2,
+            &DeployTarget {
+                min_deploy: "10.11",
+                platform: "macosx",
+            },
+            CompressOptions {
+                allow_dmp2: false,
+                dmp2_inline: false,
+                is_opaque: false,
+            },
         );
         // 16 bytes of zeros shouldn't compress smaller than themselves
         assert_eq!(&out[..4], b"MLEC");
@@ -1723,11 +1769,15 @@ mod tests {
             b"BGRA",
             16,
             16,
-            "10.11",
-            "macosx",
-            false,
-            false,
-            false,
+            &DeployTarget {
+                min_deploy: "10.11",
+                platform: "macosx",
+            },
+            CompressOptions {
+                allow_dmp2: false,
+                dmp2_inline: false,
+                is_opaque: false,
+            },
         );
         let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
         assert_eq!(comp, 4); // KCBC LZFSE
@@ -1743,11 +1793,15 @@ mod tests {
             b"BGRA",
             16,
             16,
-            "11.0",
-            "macosx",
-            true,
-            false,
-            false,
+            &DeployTarget {
+                min_deploy: "11.0",
+                platform: "macosx",
+            },
+            CompressOptions {
+                allow_dmp2: true,
+                dmp2_inline: false,
+                is_opaque: false,
+            },
         );
         let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
         assert_eq!(comp, 11);

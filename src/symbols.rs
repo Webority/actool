@@ -398,7 +398,7 @@ pub fn generate_symbol_index(
 ) -> Result<()> {
     let assets = walk_assets(xcassets_path, platform);
     let catalog_abs =
-        fs::canonicalize(xcassets_path).unwrap_or_else(|_| xcassets_path.to_path_buf());
+        dunce::canonicalize(xcassets_path).unwrap_or_else(|_| xcassets_path.to_path_buf());
     let catalog_str = catalog_abs.to_string_lossy().into_owned();
 
     let mut colors: Vec<_> = assets

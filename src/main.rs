@@ -163,10 +163,9 @@ fn main() -> ExitCode {
                 return ExitCode::from(1);
             }
             output_files
-                .push(std::fs::canonicalize(index_path).unwrap_or_else(|_| index_path.clone()));
+                .push(dunce::canonicalize(index_path).unwrap_or_else(|_| index_path.clone()));
         }
-        output_files
-            .push(std::fs::canonicalize(header_path).unwrap_or_else(|_| header_path.clone()));
+        output_files.push(dunce::canonicalize(header_path).unwrap_or_else(|_| header_path.clone()));
         if let Some(dep) = cli.export_dependency_info.as_ref() {
             if let Err(e) = write_dependency_info(dep, &document, &output_files) {
                 eprintln!("error writing deps: {e}");
@@ -331,7 +330,7 @@ fn write_dependency_info(
     out.extend_from_slice(format!("actool-{BUNDLE_VERSION}").as_bytes());
     out.push(0x00);
     let abs_input =
-        std::fs::canonicalize(xcassets_path).unwrap_or_else(|_| xcassets_path.to_path_buf());
+        dunce::canonicalize(xcassets_path).unwrap_or_else(|_| xcassets_path.to_path_buf());
     out.push(0x10);
     out.extend_from_slice(abs_input.to_string_lossy().as_bytes());
     out.push(0x00);

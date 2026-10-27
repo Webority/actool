@@ -100,12 +100,15 @@ struct PdfSyms {
     srgb_name: *mut c_void,
 }
 
+// SAFETY: the fields are function pointers into framework code that stays mapped for the process lifetime, and `srgb_name` is an immutable CFString global, so sharing the table only reads.
 unsafe impl Sync for PdfSyms {}
+// SAFETY: the fields hold no owned or mutable state, so moving the table between threads is sound.
 unsafe impl Send for PdfSyms {}
 
 #[cfg(target_os = "macos")]
 fn load_syms() -> Option<&'static PdfSyms> {
     static CELL: OnceLock<Option<PdfSyms>> = OnceLock::new();
+    // SAFETY: both handles are null-checked before any `dlsym` call, each symbol is null-checked before it is transmuted, and the `kCGColorSpaceSRGB` address is null-checked before it is dereferenced; the handles are never closed.
     CELL.get_or_init(|| unsafe {
         let cg = dlopen(
             c"/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics".as_ptr(),
@@ -124,7 +127,7 @@ fn load_syms() -> Option<&'static PdfSyms> {
                 if p.is_null() {
                     return None;
                 }
-                std::mem::transmute::<_, $ty>(p)
+                std::mem::transmute::<*mut c_void, $ty>(p)
             }};
         }
         let srgb_name_ptr = {
@@ -207,6 +210,7 @@ pub fn rasterize_pdf(pdf_data: &[u8], scale: u32) -> Result<RasterizedPdf> {
             return Err(anyhow!("CoreGraphics PDF support unavailable on this host"));
         }
     };
+    // SAFETY: every object is null-checked before use; `cf` copies `pdf_data` in `CFDataCreate`, and the document retains the provider, so no borrowed slice outlives the call; `bgra` is copied from a store that `ctx` was created with as `px_h` rows of `px_w * 4` bytes, which is the length copied.
     unsafe {
         let cf = (syms.cf_data_create)(std::ptr::null(), pdf_data.as_ptr(), pdf_data.len());
         if cf.is_null() {
@@ -296,6 +300,7 @@ pub fn rasterize_pdf(pdf_data: &[u8], scale: u32) -> Result<RasterizedPdf> {
 /// content-equivalent.
 pub fn normalize_pdf(pdf_data: &[u8]) -> Option<Vec<u8>> {
     let syms = load_syms()?;
+    // SAFETY: every object is null-checked before use; `cf` copies `pdf_data` in `CFDataCreate`; `ptr` and `len` describe the `out` data, which is read after `CGPDFContextClose` and before `out` is released.
     unsafe {
         let cf = (syms.cf_data_create)(std::ptr::null(), pdf_data.as_ptr(), pdf_data.len());
         if cf.is_null() {
