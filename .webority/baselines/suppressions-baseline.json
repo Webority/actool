@@ -1,0 +1,11 @@
+{
+  "src/compiler.rs": {
+    "rust": 2
+  },
+  "src/deepmap2.rs": {
+    "rust": 1
+  },
+  "src/icon_bundle.rs": {
+    "rust": 2
+  }
+}

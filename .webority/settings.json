@@ -20,7 +20,9 @@
     "deploy": "on-word"
   },
   "commands": {
-    "verify": "cargo fmt --all --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked -q"
+    "checks": "node ~/.claude/scripts/ratchet.js",
+    "verify": "cargo fmt --all --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked -q",
+    "buildLogChecks": "node ~/.claude/scripts/ratchet.js --build-log \"$GIT_SYNC_BUILD_LOG\""
   },
   "git": {
     "prPolicy": "release-only",
