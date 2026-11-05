@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>colors</key>
+	<array>
+		<dict>
+			<key>catalogPath</key>
+			<string>CATALOG</string>
+			<key>objcSymbol</key>
+			<string>ACColorNameAmpName</string>
+			<key>relativePath</key>
+			<string>./Amp&amp;Name.colorset</string>
+			<key>swiftSymbol</key>
+			<string>ampName</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>CATALOG</string>
+			<key>objcSymbol</key>
+			<string>ACColorNameCtlName</string>
+			<key>relativePath</key>
+			<string>./CtlName.colorset</string>
+			<key>swiftSymbol</key>
+			<string>ctlName</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>CATALOG</string>
+			<key>objcSymbol</key>
+			<string>ACColorNameLtName</string>
+			<key>relativePath</key>
+			<string>./Lt&lt;Name.colorset</string>
+			<key>swiftSymbol</key>
+			<string>ltName</string>
+		</dict>
+	</array>
+	<key>images</key>
+	<array>
+		<dict>
+			<key>catalogPath</key>
+			<string>CATALOG</string>
+			<key>objcSymbol</key>
+			<string>ACImageNameIconOne</string>
+			<key>relativePath</key>
+			<string>./Icon&amp;One.imageset</string>
+			<key>swiftSymbol</key>
+			<string>iconOne</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>CATALOG</string>
+			<key>objcSymbol</key>
+			<string>ACImageNamePicTwo</string>
+			<key>relativePath</key>
+			<string>./Pic&lt;Two.imageset</string>
+			<key>swiftSymbol</key>
+			<string>picTwo</string>
+		</dict>
+	</array>
+	<key>symbols</key>
+	<array/>
+</dict>
+</plist>

@@ -1,7 +1,6 @@
 //! Objective-C / Swift asset symbol generation.
 
 use anyhow::Result;
-use indexmap::IndexMap;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -412,61 +411,76 @@ pub fn generate_symbol_index(
     colors.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
     images.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
 
-    fn entry(asset: &Asset, catalog: &str) -> IndexMap<String, plist::Value> {
-        let mut m = IndexMap::new();
-        m.insert(
-            "catalogPath".to_string(),
-            plist::Value::String(catalog.to_string()),
-        );
-        m.insert(
-            "objcSymbol".to_string(),
-            plist::Value::String(objc_symbol_name(&asset.kind, &asset.leaf_name)),
-        );
-        m.insert(
-            "relativePath".to_string(),
-            plist::Value::String(format!("./{}", asset.relative_path)),
-        );
-        m.insert(
-            "swiftSymbol".to_string(),
-            plist::Value::String(swift_identifier(&asset.leaf_name, asset.kind.as_str())),
-        );
-        m
-    }
-
-    let mut root = plist::Dictionary::new();
-    let colors_arr: Vec<plist::Value> = colors
-        .iter()
-        .map(|a| {
-            let m = entry(a, &catalog_str);
-            let mut d = plist::Dictionary::new();
-            for (k, v) in m {
-                d.insert(k, v);
-            }
-            plist::Value::Dictionary(d)
-        })
-        .collect();
-    let images_arr: Vec<plist::Value> = images
-        .iter()
-        .map(|a| {
-            let m = entry(a, &catalog_str);
-            let mut d = plist::Dictionary::new();
-            for (k, v) in m {
-                d.insert(k, v);
-            }
-            plist::Value::Dictionary(d)
-        })
-        .collect();
-    root.insert("colors".to_string(), plist::Value::Array(colors_arr));
-    root.insert("images".to_string(), plist::Value::Array(images_arr));
-    root.insert("symbols".to_string(), plist::Value::Array(vec![]));
+    let mut out =
+        String::with_capacity(512 + (colors.len() + images.len()) * (catalog_str.len() + 256));
+    write_plist(&mut out, &catalog_str, &colors, &images);
 
     if let Some(parent) = output_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)?;
         }
     }
-    plist::to_file_xml(output_path, &plist::Value::Dictionary(root))?;
+    fs::write(output_path, out)?;
     Ok(())
+}
+
+fn write_plist(out: &mut String, catalog: &str, colors: &[&Asset], images: &[&Asset]) {
+    out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    out.push_str("<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n");
+    out.push_str("<plist version=\"1.0\">\n<dict>\n");
+    for (key, assets) in [("colors", colors), ("images", images)] {
+        out.push_str("\t<key>");
+        out.push_str(key);
+        out.push_str("</key>\n");
+        if assets.is_empty() {
+            out.push_str("\t<array/>\n");
+            continue;
+        }
+        out.push_str("\t<array>\n");
+        for asset in assets {
+            let objc = objc_symbol_name(&asset.kind, &asset.leaf_name);
+            let relative = format!("./{}", asset.relative_path);
+            let swift = swift_identifier(&asset.leaf_name, asset.kind.as_str());
+            out.push_str("\t\t<dict>\n");
+            for (k, v) in [
+                ("catalogPath", catalog),
+                ("objcSymbol", objc.as_str()),
+                ("relativePath", relative.as_str()),
+                ("swiftSymbol", swift.as_str()),
+            ] {
+                out.push_str("\t\t\t<key>");
+                out.push_str(k);
+                out.push_str("</key>\n\t\t\t<string>");
+                out.push_str(&escape(v));
+                out.push_str("</string>\n");
+            }
+            out.push_str("\t\t</dict>\n");
+        }
+        out.push_str("\t</array>\n");
+    }
+    out.push_str("\t<key>symbols</key>\n\t<array/>\n</dict>\n</plist>");
+}
+
+// Matches the plist XML writer, which also escapes quotes.
+fn escape(s: &str) -> std::borrow::Cow<'_, str> {
+    if !s
+        .bytes()
+        .any(|b| matches!(b, b'&' | b'<' | b'>' | b'\'' | b'"'))
+    {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len() + 16);
+    for ch in s.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '\'' => out.push_str("&apos;"),
+            '"' => out.push_str("&quot;"),
+            c => out.push(c),
+        }
+    }
+    std::borrow::Cow::Owned(out)
 }
 
 #[cfg(test)]

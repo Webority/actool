@@ -4,7 +4,6 @@
 //! `ic07` as PNG entries (re-encoded with sRGB + EXIF metadata) plus
 //! `ic04` as a PackBits-compressed ARGB entry.
 
-use byteorder::{BigEndian, WriteBytesExt};
 use image::imageops::FilterType;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -190,10 +189,10 @@ pub fn create_icns<P: AsRef<Path>>(
 
     let mut file = std::fs::File::create(output_path)?;
     file.write_all(b"icns")?;
-    file.write_u32::<BigEndian>(total_size)?;
+    file.write_all(&total_size.to_be_bytes())?;
     for (type_code, data) in &entries {
         file.write_all(type_code)?;
-        file.write_u32::<BigEndian>(8 + data.len() as u32)?;
+        file.write_all(&(8 + data.len() as u32).to_be_bytes())?;
         file.write_all(data)?;
     }
     Ok(())

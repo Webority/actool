@@ -6,9 +6,6 @@
 use indexmap::IndexMap;
 use std::path::Path;
 
-#[cfg(test)]
-use byteorder::BigEndian;
-
 pub struct BomWriter {
     blocks: Vec<Vec<u8>>,
     named_blocks: IndexMap<String, usize>,
@@ -400,17 +397,19 @@ fn build_tree_header(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use byteorder::ReadBytesExt;
-    use std::io::Cursor;
-
     #[test]
     fn empty_bom() {
         let bom = BomWriter::new();
         let data = bom.to_bytes();
         assert_eq!(&data[..8], b"BOMStore");
-        let mut c = Cursor::new(&data[8..]);
-        assert_eq!(c.read_u32::<BigEndian>().unwrap(), 1); // version
-        assert_eq!(c.read_u32::<BigEndian>().unwrap(), 1); // num blocks (just null)
+        assert_eq!(
+            u32::from_be_bytes(data[8..12].try_into().expect("four bytes")),
+            1
+        ); // version
+        assert_eq!(
+            u32::from_be_bytes(data[12..16].try_into().expect("four bytes")),
+            1
+        ); // num blocks (just null)
     }
 
     #[test]
