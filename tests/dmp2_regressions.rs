@@ -1,7 +1,7 @@
 //! Regression tests for DMP2 (deepmap2) compression selection.
 
 use actool::{
-    car::{compress_data, CompressOptions, DeployTarget},
+    car::{CompressOptions, DeployTarget, compress_data},
     deepmap2,
 };
 

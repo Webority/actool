@@ -121,7 +121,7 @@ fn syms() -> Option<&'static Syms> {
             return None;
         }
         macro_rules! sym {
-            ($name:expr, $ty:ty) => {{
+            ($name:expr_2021, $ty:ty) => {{
                 let p = dlsym(cg, $name.as_ptr());
                 if p.is_null() {
                     return None;
@@ -238,27 +238,29 @@ const SQUIRCLE_N: f64 = 5.0;
 ///
 /// `s` must come from `syms()`, so every function pointer in it is resolved and non-null. The caller releases the returned path with `CGPathRelease`.
 unsafe fn build_squircle_path(s: &Syms, rect: CGRect) -> *mut c_void {
-    let a = rect.size.width / 2.0;
-    let cx = rect.origin.x + a;
-    let cy = rect.origin.y + a;
-    // Curvature concentrates near the corners; sample by edge length so even
-    // small renditions stay smooth there.
-    let steps = (rect.size.width as usize).clamp(256, 2048);
-    let path = (s.path_create_mutable)();
-    let e = 2.0 / SQUIRCLE_N;
-    for i in 0..steps {
-        let t = (i as f64) / (steps as f64) * std::f64::consts::TAU;
-        let (st, ct) = t.sin_cos();
-        let x = cx + a * ct.signum() * ct.abs().powf(e);
-        let y = cy + a * st.signum() * st.abs().powf(e);
-        if i == 0 {
-            (s.path_move)(path, std::ptr::null(), x, y);
-        } else {
-            (s.path_line)(path, std::ptr::null(), x, y);
+    unsafe {
+        let a = rect.size.width / 2.0;
+        let cx = rect.origin.x + a;
+        let cy = rect.origin.y + a;
+        // Curvature concentrates near the corners; sample by edge length so even
+        // small renditions stay smooth there.
+        let steps = (rect.size.width as usize).clamp(256, 2048);
+        let path = (s.path_create_mutable)();
+        let e = 2.0 / SQUIRCLE_N;
+        for i in 0..steps {
+            let t = (i as f64) / (steps as f64) * std::f64::consts::TAU;
+            let (st, ct) = t.sin_cos();
+            let x = cx + a * ct.signum() * ct.abs().powf(e);
+            let y = cy + a * st.signum() * st.abs().powf(e);
+            if i == 0 {
+                (s.path_move)(path, std::ptr::null(), x, y);
+            } else {
+                (s.path_line)(path, std::ptr::null(), x, y);
+            }
         }
+        (s.path_close)(path);
+        path
     }
-    (s.path_close)(path);
-    path
 }
 
 /// Composite a sized rendition: the gradient background and the supplied layer

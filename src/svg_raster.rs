@@ -76,7 +76,7 @@ pub use imp::{has_coresvg, rasterize_svg};
 #[cfg(target_os = "macos")]
 mod imp {
     use super::parse_svg_dimensions;
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use std::os::raw::{c_char, c_double, c_void};
     use std::sync::OnceLock;
 
@@ -146,7 +146,7 @@ mod imp {
                 return None;
             }
             macro_rules! sym {
-                ($handle:expr, $name:expr, $ty:ty) => {{
+                ($handle:expr_2021, $name:expr_2021, $ty:ty) => {{
                     let p = dlsym($handle, $name.as_ptr());
                     if p.is_null() {
                         return None;

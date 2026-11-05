@@ -5,7 +5,7 @@
 use crate::car::{self, MultisizeImageEntry, Rendition};
 use crate::name_hash::hash_name;
 use crate::svg_raster;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use image::DynamicImage;
 use indexmap::IndexMap;
 use serde_json::Value;

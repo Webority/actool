@@ -109,11 +109,7 @@ impl Atlas {
     fn bpp_for_format(pf: &[u8]) -> usize {
         // BGRA and "61AG" (GA16) both consume 4 bytes per pixel; GA8
         // is the only 2-byte format we currently emit.
-        if pf == b"BGRA" || pf == b"61AG" {
-            4
-        } else {
-            2
-        }
+        if pf == b"BGRA" || pf == b"61AG" { 4 } else { 2 }
     }
 
     pub fn bytes_per_row(&self) -> usize {

@@ -453,8 +453,8 @@ fn compress_kcbc(pixel_data: &[u8], height: u32) -> Option<Vec<u8>> {
 }
 
 fn gzip_compress(data: &[u8]) -> Option<Vec<u8>> {
-    use flate2::write::GzEncoder;
     use flate2::Compression;
+    use flate2::write::GzEncoder;
     let mut enc = GzEncoder::new(Vec::new(), Compression::default());
     enc.write_all(data).ok()?;
     enc.finish().ok()

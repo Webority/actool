@@ -166,11 +166,7 @@ pub fn compile_catalog_with_icons(
             .map(|i| {
                 let r = &renditions[*i];
                 let intent = if r.template_rendering_intent < 0 {
-                    if r.is_template {
-                        2
-                    } else {
-                        4
-                    }
+                    if r.is_template { 2 } else { 4 }
                 } else {
                     r.template_rendering_intent
                 };

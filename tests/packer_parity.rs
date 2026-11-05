@@ -4,7 +4,7 @@
 //! `random.seed(42)` in Python) and compares placement coordinates
 //! against the Python implementation's output.
 
-use actool::packer::{pack_images_split, PackedImage};
+use actool::packer::{PackedImage, pack_images_split};
 
 // (name, width, height) — captured from:
 //   random.seed(42)

@@ -183,11 +183,7 @@ fn main() -> ExitCode {
             .filter(|s| !s.is_empty())
             .cloned()
             .collect();
-        if v.is_empty() {
-            None
-        } else {
-            Some(v)
-        }
+        if v.is_empty() { None } else { Some(v) }
     };
     let plist_l10n = !matches!(
         cli.include_partial_info_plist_localizations

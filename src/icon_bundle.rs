@@ -49,11 +49,22 @@ fn deterministic_uuid(inputs: &[&str]) -> String {
     };
     format!(
         "{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-        bytes[0], bytes[1], bytes[2], bytes[3],
-        bytes[4], bytes[5],
-        bytes[6], bytes[7],
-        bytes[8], bytes[9],
-        bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        bytes[0],
+        bytes[1],
+        bytes[2],
+        bytes[3],
+        bytes[4],
+        bytes[5],
+        bytes[6],
+        bytes[7],
+        bytes[8],
+        bytes[9],
+        bytes[10],
+        bytes[11],
+        bytes[12],
+        bytes[13],
+        bytes[14],
+        bytes[15],
     )
 }
 
@@ -1716,8 +1727,8 @@ fn shadow_params(
     spec: Option<crate::icon_effects::ShadowSpec>,
     pixel_size: u32,
 ) -> Option<crate::icon_render::ShadowParams> {
-    use crate::icon_effects::shadow_geometry::{BLUR_RATIO, OFFSET_Y_RATIO, PEAK_ALPHA};
     use crate::icon_effects::ShadowKind;
+    use crate::icon_effects::shadow_geometry::{BLUR_RATIO, OFFSET_Y_RATIO, PEAK_ALPHA};
     let spec = spec?;
     if spec.kind == ShadowKind::None || spec.opacity <= 0.0 {
         return None;
@@ -1757,7 +1768,7 @@ fn build_dark_variant_tint(
     let mut out = vec![0u8; n * 4];
     for i in 0..n {
         let m = mask[i * 4 + 3] as f32 / 255.0; // squircle coverage
-                                                // Black drop shadow restricted to the margin (outside the squircle).
+        // Black drop shadow restricted to the margin (outside the squircle).
         let sa = (shadowed[i * 4 + 3] as f32 / 255.0) * (1.0 - m);
         let tint_a = (DARK_TINT_ALPHA / 255.0) * m;
         let out_a = tint_a + sa * (1.0 - tint_a); // tint over black shadow
@@ -2788,8 +2799,8 @@ mod tests {
             native_h: 1024,
         };
         let i = (128 * 256 + 128) * 4; // centre at 256², premul-first BGRA
-                                       // One tinted blue layer over grey 153: out = 153 − 63.5·(1−col).
-                                       // R(col 0) ≈ 89, B(col 0.9) ≈ 147 — darkened, blue ordering preserved.
+        // One tinted blue layer over grey 153: out = 153 − 63.5·(1−col).
+        // R(col 0) ≈ 89, B(col 0.9) ≈ 147 — darkened, blue ordering preserved.
         let single = render_layer_stack(&[mk(&blue, true)], 256, Some(&grad)).unwrap();
         let (b1, g1, r1) = (single[i], single[i + 1], single[i + 2]);
         assert!(

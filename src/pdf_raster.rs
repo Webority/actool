@@ -12,7 +12,7 @@
 //! warning per session and skip rasterization. The PDF rendition is
 //! still emitted so the catalog stays self-consistent.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 #[cfg(target_os = "macos")]
 use std::os::raw::c_char;
 use std::os::raw::{c_double, c_void};
@@ -124,7 +124,7 @@ fn load_syms() -> Option<&'static PdfSyms> {
             return None;
         }
         macro_rules! sym {
-            ($handle:expr, $name:expr, $ty:ty) => {{
+            ($handle:expr_2021, $name:expr_2021, $ty:ty) => {{
                 let p = dlsym($handle, $name.as_ptr());
                 if p.is_null() {
                     return None;
