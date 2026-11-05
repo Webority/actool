@@ -402,10 +402,10 @@ impl AssetCatalog {
         let Some(filter) = &self.include_languages else {
             return true;
         };
-        if let Some(dev) = &self.development_region {
-            if locale == dev {
-                return true;
-            }
+        if let Some(dev) = &self.development_region
+            && locale == dev
+        {
+            return true;
         }
         filter.iter().any(|s| s == locale)
     }
@@ -450,21 +450,19 @@ impl AssetCatalog {
                 "" if item.is_dir() => {
                     let mut child_ns = namespace.to_string();
                     let group_json = item.join("Contents.json");
-                    if group_json.exists() {
-                        if let Ok(v) = read_json(&group_json) {
-                            if v.get("properties")
-                                .and_then(|p| p.get("provides-namespace"))
-                                .and_then(|x| x.as_bool())
-                                .unwrap_or(false)
-                            {
-                                let name = item.file_name().unwrap_or_default().to_string_lossy();
-                                child_ns = if namespace.is_empty() {
-                                    format!("{name}/")
-                                } else {
-                                    format!("{namespace}{name}/")
-                                };
-                            }
-                        }
+                    if group_json.exists()
+                        && let Ok(v) = read_json(&group_json)
+                        && v.get("properties")
+                            .and_then(|p| p.get("provides-namespace"))
+                            .and_then(|x| x.as_bool())
+                            .unwrap_or(false)
+                    {
+                        let name = item.file_name().unwrap_or_default().to_string_lossy();
+                        child_ns = if namespace.is_empty() {
+                            format!("{name}/")
+                        } else {
+                            format!("{namespace}{name}/")
+                        };
                     }
                     self.parse_directory(&item, renditions, facets, &child_ns)?;
                 }

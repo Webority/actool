@@ -726,12 +726,12 @@ fn rasterize_layer(path: &Path, w: u32, h: u32) -> Result<Vec<u8>> {
 /// used to render it at the right aspect inside the 1024-pt canvas.
 fn layer_native_size(path: &Path) -> (u32, u32) {
     if is_svg_path(path) {
-        if let Ok(svg) = fs::read(path) {
-            if let Ok((w, h)) = crate::svg_raster::parse_svg_dimensions(&svg) {
-                if w > 0 && h > 0 {
-                    return (w, h);
-                }
-            }
+        if let Ok(svg) = fs::read(path)
+            && let Ok((w, h)) = crate::svg_raster::parse_svg_dimensions(&svg)
+            && w > 0
+            && h > 0
+        {
+            return (w, h);
         }
         (1024, 1024)
     } else {
@@ -1004,47 +1004,45 @@ fn render_layer_stack(
     // Per-layer drop shadow: offset the accumulated darkening down, blur it, and
     // subtract it from the background — but only on background pixels (where no
     // layer/glass is already opaque), so the casting layer stays on top.
-    if any_shadow {
-        if let Some(g) = gradient {
-            let off = (SHADOW_OFFSET_Y * f).round() as usize;
-            let mut chans: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
-            for y in 0..w {
-                let sy = y.saturating_sub(off); // shift darkening downward
-                for x in 0..w {
-                    for c in 0..3 {
-                        chans[c][y * w + x] = shadow_dark[sy * w + x][c];
-                    }
+    if any_shadow && let Some(g) = gradient {
+        let off = (SHADOW_OFFSET_Y * f).round() as usize;
+        let mut chans: [Vec<f32>; 3] = [vec![0.0; n], vec![0.0; n], vec![0.0; n]];
+        for y in 0..w {
+            let sy = y.saturating_sub(off); // shift darkening downward
+            for x in 0..w {
+                for c in 0..3 {
+                    chans[c][y * w + x] = shadow_dark[sy * w + x][c];
                 }
             }
-            let radius = (SHADOW_SIGMA * f).round() as usize;
-            if radius >= 1 {
-                let mut tmp = vec![0.0f32; n];
-                for c in &mut chans {
-                    for _ in 0..3 {
-                        box_blur_h(c, &mut tmp, w, radius);
-                        box_blur_v(c, &mut tmp, w, radius);
-                    }
+        }
+        let radius = (SHADOW_SIGMA * f).round() as usize;
+        if radius >= 1 {
+            let mut tmp = vec![0.0f32; n];
+            for c in &mut chans {
+                for _ in 0..3 {
+                    box_blur_h(c, &mut tmp, w, radius);
+                    box_blur_v(c, &mut tmp, w, radius);
                 }
             }
-            for y in 0..w {
-                for x in 0..w {
-                    let i = y * w + x;
-                    if rgba[i * 4 + 3] >= 16 {
-                        continue; // a layer/glass already covers this pixel
-                    }
-                    let dark = [chans[0][i], chans[1][i], chans[2][i]];
-                    if dark[0] + dark[1] + dark[2] < 0.004 {
-                        continue;
-                    }
-                    let bg = g.sample(x as u32, y as u32, pixel_size);
-                    let mut out = [0u8; 4];
-                    for c in 0..3 {
-                        let v = (bg[c] as f32 - dark[c]).clamp(0.0, 1.0);
-                        out[c] = (v * 255.0).round() as u8;
-                    }
-                    out[3] = 255;
-                    rgba[i * 4..i * 4 + 4].copy_from_slice(&out);
+        }
+        for y in 0..w {
+            for x in 0..w {
+                let i = y * w + x;
+                if rgba[i * 4 + 3] >= 16 {
+                    continue; // a layer/glass already covers this pixel
                 }
+                let dark = [chans[0][i], chans[1][i], chans[2][i]];
+                if dark[0] + dark[1] + dark[2] < 0.004 {
+                    continue;
+                }
+                let bg = g.sample(x as u32, y as u32, pixel_size);
+                let mut out = [0u8; 4];
+                for c in 0..3 {
+                    let v = (bg[c] as f32 - dark[c]).clamp(0.0, 1.0);
+                    out[c] = (v * 255.0).round() as u8;
+                }
+                out[3] = 255;
+                rgba[i * 4..i * 4 + 4].copy_from_slice(&out);
             }
         }
     }
@@ -2593,10 +2591,10 @@ fn build_bitmapkeys(
 }
 
 fn write_populated_partial_plist(path: &Path, icon_name: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
     let body = format!(
         concat!(
@@ -2618,10 +2616,10 @@ fn write_populated_partial_plist(path: &Path, icon_name: &str) -> Result<()> {
 }
 
 fn write_empty_partial_plist(path: &Path) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
     let body = concat!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",

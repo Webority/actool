@@ -482,11 +482,11 @@ fn build_bitmapkeys(
         let vals: Vec<u16> = (0..n_vals)
             .map(|i| u16::from_le_bytes([key_data[i * 2], key_data[i * 2 + 1]]))
             .collect();
-        if let Some(p) = id_pos {
-            if p < vals.len() {
-                let ident = vals[p];
-                id_keys.entry(ident).or_default().push(vals);
-            }
+        if let Some(p) = id_pos
+            && p < vals.len()
+        {
+            let ident = vals[p];
+            id_keys.entry(ident).or_default().push(vals);
         }
     }
 
@@ -538,10 +538,10 @@ fn write_info_plist(
     widget_background_color: Option<&str>,
     localizations: &[String],
 ) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
     let mut lines = vec![
         r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
@@ -669,10 +669,10 @@ fn write_ios_icon_plist(
     icons: &[IconImage],
     alternates: &[(String, Vec<IconImage>)],
 ) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
 
     let mut lines = vec![

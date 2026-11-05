@@ -238,6 +238,7 @@ const SQUIRCLE_N: f64 = 5.0;
 ///
 /// `s` must come from `syms()`, so every function pointer in it is resolved and non-null. The caller releases the returned path with `CGPathRelease`.
 unsafe fn build_squircle_path(s: &Syms, rect: CGRect) -> *mut c_void {
+    // SAFETY: the caller upholds this function's contract, so every pointer in `s` is resolved and non-null.
     unsafe {
         let a = rect.size.width / 2.0;
         let cx = rect.origin.x + a;

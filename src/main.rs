@@ -166,11 +166,11 @@ fn main() -> ExitCode {
                 .push(dunce::canonicalize(index_path).unwrap_or_else(|_| index_path.clone()));
         }
         output_files.push(dunce::canonicalize(header_path).unwrap_or_else(|_| header_path.clone()));
-        if let Some(dep) = cli.export_dependency_info.as_ref() {
-            if let Err(e) = write_dependency_info(dep, &document, &output_files) {
-                eprintln!("error writing deps: {e}");
-                return ExitCode::from(1);
-            }
+        if let Some(dep) = cli.export_dependency_info.as_ref()
+            && let Err(e) = write_dependency_info(dep, &document, &output_files)
+        {
+            eprintln!("error writing deps: {e}");
+            return ExitCode::from(1);
         }
         print_compilation_results(&cli.output_format, &output_files);
         return ExitCode::SUCCESS;
@@ -243,11 +243,11 @@ fn main() -> ExitCode {
         }
     };
 
-    if let Some(dep) = cli.export_dependency_info.as_ref() {
-        if let Err(e) = write_dependency_info(dep, &document, &output_files) {
-            eprintln!("error writing deps: {e}");
-            return ExitCode::from(1);
-        }
+    if let Some(dep) = cli.export_dependency_info.as_ref()
+        && let Err(e) = write_dependency_info(dep, &document, &output_files)
+    {
+        eprintln!("error writing deps: {e}");
+        return ExitCode::from(1);
     }
 
     print_compilation_results(&cli.output_format, &output_files);

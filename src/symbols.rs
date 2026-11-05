@@ -133,19 +133,16 @@ fn walk_assets_inner(
             }
             "" => {
                 let mut child_ns = namespace.to_string();
-                if contents.exists() {
-                    if let Ok(raw) = fs::read_to_string(&contents) {
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) {
-                            if json
-                                .get("properties")
-                                .and_then(|p| p.get("provides-namespace"))
-                                .and_then(|v| v.as_bool())
-                                .unwrap_or(false)
-                            {
-                                child_ns = format!("{namespace}{name}/");
-                            }
-                        }
-                    }
+                if contents.exists()
+                    && let Ok(raw) = fs::read_to_string(&contents)
+                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw)
+                    && json
+                        .get("properties")
+                        .and_then(|p| p.get("provides-namespace"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                {
+                    child_ns = format!("{namespace}{name}/");
                 }
                 let child_rel = format!("{rel_prefix}{file_name}/");
                 walk_assets_inner(&item, platform, &child_rel, &child_ns, out);
@@ -203,11 +200,11 @@ pub fn split_words(name: &str) -> Vec<String> {
             }
             Some(Kind::Upper) if k == Kind::Lower => {
                 // UPPERLower: last upper belongs with the lower run
-                if current.chars().count() > 1 {
-                    if let Some(last) = current.pop() {
-                        words.push(std::mem::take(&mut current));
-                        current.push(last);
-                    }
+                if current.chars().count() > 1
+                    && let Some(last) = current.pop()
+                {
+                    words.push(std::mem::take(&mut current));
+                    current.push(last);
                 }
                 current.push(ch);
             }
@@ -256,10 +253,11 @@ pub fn swift_identifier(name: &str, kind: &str) -> String {
         "symbol" => Some("symbol"),
         _ => None,
     };
-    if let Some(s) = strip {
-        if words.len() > 1 && words.last().map(|w| w.to_lowercase()).as_deref() == Some(s) {
-            words.pop();
-        }
+    if let Some(s) = strip
+        && words.len() > 1
+        && words.last().map(|w| w.to_lowercase()).as_deref() == Some(s)
+    {
+        words.pop();
     }
 
     let mut out = String::new();
@@ -381,10 +379,10 @@ pub fn generate_symbols_header(
 
     s.push_str("#undef AC_SWIFT_PRIVATE\n");
 
-    if let Some(parent) = output_path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = output_path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
     fs::write(output_path, s)?;
     Ok(())
@@ -415,10 +413,10 @@ pub fn generate_symbol_index(
         String::with_capacity(512 + (colors.len() + images.len()) * (catalog_str.len() + 256));
     write_plist(&mut out, &catalog_str, &colors, &images);
 
-    if let Some(parent) = output_path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = output_path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
     fs::write(output_path, out)?;
     Ok(())

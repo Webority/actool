@@ -485,45 +485,47 @@ pub fn compress_data(
 
     if options.allow_dmp2 {
         let dmp2_min = min_dmp2_version(target.platform);
-        if deploy_ver >= dmp2_min && pixel_data.len() > 256 {
-            if let Some(dmp2_data) = deepmap2::encode(pixel_data, pixel_format, width, height) {
-                let celm_ver = if options.is_opaque { 2 } else { 0 };
-                return deepmap2::make_celm_dmp2(
-                    &dmp2_data,
-                    pixel_format,
-                    options.dmp2_inline,
-                    celm_ver,
-                );
-            }
+        if deploy_ver >= dmp2_min
+            && pixel_data.len() > 256
+            && let Some(dmp2_data) = deepmap2::encode(pixel_data, pixel_format, width, height)
+        {
+            let celm_ver = if options.is_opaque { 2 } else { 0 };
+            return deepmap2::make_celm_dmp2(
+                &dmp2_data,
+                pixel_format,
+                options.dmp2_inline,
+                celm_ver,
+            );
         }
     }
 
     let lzfse_min = min_lzfse_version(target.platform);
-    if deploy_ver >= lzfse_min && pixel_data.len() > 256 {
-        if let Some(kcbc) = compress_kcbc(pixel_data, height) {
-            let celm_ver: u32 = if options.is_opaque { 3 } else { 1 };
-            let mut out = Vec::new();
-            out.extend_from_slice(b"MLEC");
-            out.extend_from_slice(&u32::to_le_bytes(celm_ver));
-            out.extend_from_slice(&u32::to_le_bytes(4));
-            out.extend_from_slice(&u32::to_le_bytes(3));
-            out.extend_from_slice(b"KCBC");
-            out.extend_from_slice(&kcbc);
-            return out;
-        }
+    if deploy_ver >= lzfse_min
+        && pixel_data.len() > 256
+        && let Some(kcbc) = compress_kcbc(pixel_data, height)
+    {
+        let celm_ver: u32 = if options.is_opaque { 3 } else { 1 };
+        let mut out = Vec::new();
+        out.extend_from_slice(b"MLEC");
+        out.extend_from_slice(&u32::to_le_bytes(celm_ver));
+        out.extend_from_slice(&u32::to_le_bytes(4));
+        out.extend_from_slice(&u32::to_le_bytes(3));
+        out.extend_from_slice(b"KCBC");
+        out.extend_from_slice(&kcbc);
+        return out;
     }
 
     if pixel_data.len() >= 4096 {
-        if let Some(gz) = gzip_compress(pixel_data) {
-            if gz.len() < pixel_data.len() {
-                let mut out = Vec::new();
-                out.extend_from_slice(b"MLEC");
-                out.extend_from_slice(&u32::to_le_bytes(0));
-                out.extend_from_slice(&u32::to_le_bytes(2));
-                out.extend_from_slice(&u32::to_le_bytes(gz.len() as u32));
-                out.extend_from_slice(&gz);
-                return out;
-            }
+        if let Some(gz) = gzip_compress(pixel_data)
+            && gz.len() < pixel_data.len()
+        {
+            let mut out = Vec::new();
+            out.extend_from_slice(b"MLEC");
+            out.extend_from_slice(&u32::to_le_bytes(0));
+            out.extend_from_slice(&u32::to_le_bytes(2));
+            out.extend_from_slice(&u32::to_le_bytes(gz.len() as u32));
+            out.extend_from_slice(&gz);
+            return out;
         }
     } else if height > 0 {
         let bpp = if pixel_format == b"BGRA" { 4 } else { 2 };
