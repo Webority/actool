@@ -601,12 +601,9 @@ impl AssetCatalog {
                 renditions.push(rend);
 
                 // Apple's actool emits raster variants of every PDF imageset
-                // at @1x and @2x alongside the original PDF rendition. They
-                // become packed_ref entries via the existing atlas packer.
-                // On non-macOS hosts CoreGraphics isn't available and we
-                // skip this — the catalog stays self-consistent but apps
-                // that ask for the rasterized variant get nothing.
-                for scale in [1u32, 2u32] {
+                // beside the original PDF rendition, at the platform's scales.
+                // They become packed_ref entries via the existing atlas packer.
+                for &scale in vector_raster_scales(&self.platform) {
                     let raster = match crate::pdf_raster::rasterize_pdf(&pdf_data, scale) {
                         Ok(r) => r,
                         Err(_) => continue,
@@ -701,7 +698,10 @@ impl AssetCatalog {
                 if svg_raster::has_coresvg() {
                     let (svg_w, svg_h) = svg_raster::parse_svg_dimensions(&svg_data)?;
                     if svg_w > 0 && svg_h > 0 {
-                        for raster_scale in [1u16, 2] {
+                        for raster_scale in vector_raster_scales(&self.platform)
+                            .iter()
+                            .map(|&s| s as u16)
+                        {
                             let pixel_data = svg_raster::rasterize_svg(
                                 &svg_data,
                                 svg_w,
@@ -883,7 +883,10 @@ impl AssetCatalog {
                         svg_w = point_w;
                         svg_h = point_w;
                     }
-                    for raster_scale in [1u16, 2] {
+                    for raster_scale in vector_raster_scales(&self.platform)
+                        .iter()
+                        .map(|&s| s as u16)
+                    {
                         let pixel_data = svg_raster::rasterize_svg(
                             &svg_data,
                             svg_w,
@@ -1606,6 +1609,16 @@ fn stamp_idiom(renditions: &mut [Rendition], start: usize, idiom: u16) {
     }
     for r in &mut renditions[start..] {
         r.idiom = idiom;
+    }
+}
+
+/// The scales Xcode rasterises a PDF or SVG image set at, beside its vector rendition: 1x and 2x
+/// on macOS, 1x to 3x on iOS (Xcode 26.5 captures, tests/ref_samples/raster_output).
+fn vector_raster_scales(platform: &str) -> &'static [u32] {
+    if platform == "macosx" {
+        &[1, 2]
+    } else {
+        &[1, 2, 3]
     }
 }
 

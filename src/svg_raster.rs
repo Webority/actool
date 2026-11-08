@@ -1,16 +1,14 @@
-//! SVG rasterization via macOS CoreSVG private framework.
+//! SVG rasterization.
 //!
-//! Mirrors the Python implementation that calls `CGSVGDocumentCreateFromData`
-//! and `CGContextDrawSVGDocument` from `PrivateFrameworks/CoreSVG.framework`.
-//! Rust-native SVG renderers (resvg, etc.) will not match Apple's output
-//! byte-for-byte, so we use the same private API the system `actool` does.
+//! On macOS it goes through the CoreSVG private framework, calling
+//! `CGSVGDocumentCreateFromData` and `CGContextDrawSVGDocument` from
+//! `PrivateFrameworks/CoreSVG.framework` as the system `actool` does. All of
+//! that FFI lives in the macOS-only [`imp`] module.
 //!
-//! All of the CoreGraphics/CoreSVG FFI lives in the macOS-only [`imp`] module.
-//! On every other platform `rasterize_svg`/`has_coresvg` are safe no-ops
-//! ([`has_coresvg`] returns `false`; [`rasterize_svg`] returns an error), so the
-//! crate compiles and links without referencing any Apple framework. Callers
-//! gate on `has_coresvg()` (xcassets) or treat the error as "SVG unsupported
-//! here" (`.icon`), exactly as on macOS when the framework is unavailable.
+//! On every other platform the pure-Rust `resvg` renderer draws the image; it
+//! agrees with CoreSVG within a small pixel tolerance (`tests/raster_parity.rs`)
+//! but not byte for byte, and renders no text. Callers gate on
+//! `has_coresvg()` (xcassets).
 
 #[cfg(not(target_os = "macos"))]
 use anyhow::Result;
@@ -54,20 +52,46 @@ pub fn parse_svg_dimensions(svg: &[u8]) -> anyhow::Result<(u32, u32)> {
     Ok((0, 0))
 }
 
-/// Whether CoreSVG rasterization is available (always `false` off macOS).
+/// Whether SVG rasterization is available (always `true` off macOS, where the
+/// pure-Rust `resvg` renderer is compiled in).
 #[cfg(not(target_os = "macos"))]
 pub fn has_coresvg() -> bool {
-    false
+    true
 }
 
-/// Safe no-op on non-macOS: there is no CoreSVG framework to call, so report
-/// the failure and let the caller skip/fall back (it never panics or links an
-/// Apple framework).
+/// Rasterize SVG data with `resvg` into a premultiplied `BGRA` pixel buffer of
+/// `(width*scale) x (height*scale)`, scaling the document's own size to fit.
+/// No fonts are loaded, so SVG text renders nothing: a build machine's
+/// installed fonts must not change what an icon compiles to.
 #[cfg(not(target_os = "macos"))]
-pub fn rasterize_svg(_svg_data: &[u8], _width: u32, _height: u32, _scale: u32) -> Result<Vec<u8>> {
-    Err(anyhow::anyhow!(
-        "CoreSVG rasterization is only available on macOS"
-    ))
+pub fn rasterize_svg(svg_data: &[u8], width: u32, height: u32, scale: u32) -> Result<Vec<u8>> {
+    use resvg::tiny_skia::{Pixmap, Transform};
+    use resvg::usvg::{Options, Tree};
+
+    let pixel_w = width
+        .checked_mul(scale)
+        .filter(|w| *w > 0)
+        .ok_or_else(|| anyhow::anyhow!("SVG raster width is zero or overflows"))?;
+    let pixel_h = height
+        .checked_mul(scale)
+        .filter(|h| *h > 0)
+        .ok_or_else(|| anyhow::anyhow!("SVG raster height is zero or overflows"))?;
+    let tree = Tree::from_data(svg_data, &Options::default())
+        .map_err(|e| anyhow::anyhow!("SVG parse failed: {e}"))?;
+    let size = tree.size();
+    let mut pixmap = Pixmap::new(pixel_w, pixel_h)
+        .ok_or_else(|| anyhow::anyhow!("SVG raster size {pixel_w}x{pixel_h} is not allocatable"))?;
+    let transform = Transform::from_scale(
+        pixel_w as f32 / size.width(),
+        pixel_h as f32 / size.height(),
+    );
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+
+    let mut bgra = pixmap.take();
+    for px in bgra.as_chunks_mut::<4>().0 {
+        px.swap(0, 2);
+    }
+    Ok(bgra)
 }
 
 #[cfg(target_os = "macos")]
