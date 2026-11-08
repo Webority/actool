@@ -215,6 +215,12 @@ fn main() -> ExitCode {
                 .collect(),
             include_all_app_icons: cli.include_all_app_icons,
         };
+        let target_devices: Vec<String> = cli
+            .target_device
+            .iter()
+            .filter(|device| !device.is_empty())
+            .cloned()
+            .collect();
         match compiler::compile_catalog_with_icons(
             &document,
             &compile_dir,
@@ -230,6 +236,7 @@ fn main() -> ExitCode {
             cli.development_region.clone(),
             plist_l10n,
             cli.compress_pngs,
+            &target_devices,
         ) {
             Ok(f) => f,
             Err(e) => {

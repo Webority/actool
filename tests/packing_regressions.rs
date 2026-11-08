@@ -95,7 +95,19 @@ fn lone_ga8_stored_inline() {
     .expect("make catalog");
     let out = tmp.join("out");
     compiler::compile_catalog(
-        &catalog, &out, "macosx", "11.0", None, None, None, None, "default", None, None, true,
+        &catalog,
+        &out,
+        "macosx",
+        "11.0",
+        None,
+        None,
+        None,
+        None,
+        "default",
+        None,
+        None,
+        true,
+        &[],
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));
@@ -110,7 +122,19 @@ fn single_imageset_stored_inline() {
     let catalog = make_catalog(&tmp, &[("Solo", "RGBA")]).expect("make");
     let out = tmp.join("out");
     compiler::compile_catalog(
-        &catalog, &out, "macosx", "11.0", None, None, None, None, "default", None, None, true,
+        &catalog,
+        &out,
+        "macosx",
+        "11.0",
+        None,
+        None,
+        None,
+        None,
+        "default",
+        None,
+        None,
+        true,
+        &[],
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));
@@ -125,7 +149,19 @@ fn all_same_format_packed() {
     let catalog = make_catalog(&tmp, &[("X", "LA"), ("Y", "LA"), ("Z", "LA")]).expect("make");
     let out = tmp.join("out");
     compiler::compile_catalog(
-        &catalog, &out, "macosx", "11.0", None, None, None, None, "default", None, None, true,
+        &catalog,
+        &out,
+        "macosx",
+        "11.0",
+        None,
+        None,
+        None,
+        None,
+        "default",
+        None,
+        None,
+        true,
+        &[],
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));
@@ -144,7 +180,19 @@ fn two_formats_one_each_both_inline() {
     let catalog = make_catalog(&tmp, &[("Color", "RGBA"), ("Gray", "LA")]).expect("make");
     let out = tmp.join("out");
     compiler::compile_catalog(
-        &catalog, &out, "macosx", "11.0", None, None, None, None, "default", None, None, true,
+        &catalog,
+        &out,
+        "macosx",
+        "11.0",
+        None,
+        None,
+        None,
+        None,
+        "default",
+        None,
+        None,
+        true,
+        &[],
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));

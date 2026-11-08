@@ -70,6 +70,7 @@ fn compile_ios(xcassets: &Path, out: &Path) {
         None,
         None,
         true,
+        &[],
     )
     .expect("compile");
 }
@@ -115,6 +116,7 @@ fn compile_ios_icon(xcassets: &Path, out: &Path) {
         None,
         None,
         true,
+        &[],
     )
     .expect("compile");
 }
@@ -580,6 +582,7 @@ fn ios_single_size_appicon_matches_actool() {
             None,
             true,
             platform == "iphoneos",
+            &[],
         )
         .expect("compile");
 

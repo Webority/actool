@@ -37,6 +37,7 @@ pub fn compile_catalog(
     include_languages: Option<Vec<String>>,
     development_region: Option<String>,
     plist_localizations: bool,
+    target_devices: &[String],
 ) -> Result<Vec<PathBuf>> {
     compile_catalog_with_icons(
         xcassets_path,
@@ -53,6 +54,7 @@ pub fn compile_catalog(
         development_region,
         plist_localizations,
         false,
+        target_devices,
     )
 }
 
@@ -75,6 +77,7 @@ pub fn compile_catalog_with_icons(
     development_region: Option<String>,
     plist_localizations: bool,
     compress_pngs: bool,
+    target_devices: &[String],
 ) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(output_dir)?;
     let has_icon = app_icon.is_some();
@@ -90,7 +93,8 @@ pub fn compile_catalog_with_icons(
     .with_icon_selection(
         icons.alternate_app_icons.clone(),
         icons.include_all_app_icons,
-    );
+    )
+    .with_target_devices(target_devices.to_vec());
     let (mut renditions, facets) = catalog.parse()?;
 
     let deploy_ver: (u32, u32) = {

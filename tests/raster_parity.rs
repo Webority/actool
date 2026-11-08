@@ -115,9 +115,9 @@ fn car_shapes(car: &Path) -> Vec<Shape> {
     shapes
 }
 
-fn reference_shapes(info: &Path) -> Vec<Shape> {
-    let text = std::fs::read_to_string(info).expect("read assets-info.json");
-    let rows: Vec<serde_json::Value> = serde_json::from_str(&text).expect("assets-info.json");
+fn reference_shapes(info: &Path) -> anyhow::Result<Vec<Shape>> {
+    let text = std::fs::read_to_string(info)?;
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&text)?;
     let number = |row: &serde_json::Value, key: &str| row[key].as_u64().unwrap_or(0) as u32;
     let mut shapes: Vec<Shape> = rows
         .iter()
@@ -135,7 +135,7 @@ fn reference_shapes(info: &Path) -> Vec<Shape> {
         })
         .collect();
     shapes.sort();
-    shapes
+    Ok(shapes)
 }
 
 #[test]
@@ -155,10 +155,11 @@ fn vector_sets_compile_to_xcode_renditions() {
         None,
         None,
         true,
+        &[],
     )
     .expect("compile");
 
-    let want = reference_shapes(&reference.join("assets-info.json"));
+    let want = reference_shapes(&reference.join("assets-info.json")).unwrap();
     assert_eq!(
         car_shapes(&reference.join("compiled/Assets.car")),
         want,

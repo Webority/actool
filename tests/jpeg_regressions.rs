@@ -68,7 +68,19 @@ fn jpeg_stored_in_car_at_11_0() {
     let catalog = make_jpeg_catalog(&tmp);
     let out = tmp.join("out");
     compiler::compile_catalog(
-        &catalog, &out, "macosx", "11.0", None, None, None, None, "default", None, None, true,
+        &catalog,
+        &out,
+        "macosx",
+        "11.0",
+        None,
+        None,
+        None,
+        None,
+        "default",
+        None,
+        None,
+        true,
+        &[],
     )
     .expect("compile");
     let car = out.join("Assets.car");
@@ -85,7 +97,19 @@ fn jpeg_as_loose_file_at_10_9() {
     let catalog = make_jpeg_catalog(&tmp);
     let out = tmp.join("out");
     compiler::compile_catalog(
-        &catalog, &out, "macosx", "10.9", None, None, None, None, "default", None, None, true,
+        &catalog,
+        &out,
+        "macosx",
+        "10.9",
+        None,
+        None,
+        None,
+        None,
+        "default",
+        None,
+        None,
+        true,
+        &[],
     )
     .expect("compile");
     assert!(out.join("Photo.jpg").exists(), "loose Photo.jpg missing");

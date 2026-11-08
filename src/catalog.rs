@@ -269,6 +269,8 @@ pub struct AssetCatalog {
     pub include_all_app_icons: bool,
     pub include_languages: Option<Vec<String>>,
     pub development_region: Option<String>,
+    /// `--target-device` values; empty means every idiom of the platform.
+    pub target_devices: Vec<String>,
     identifiers: IndexMap<String, u16>,
     locales_used: HashSet<String>,
     force_bgra: bool,
@@ -325,6 +327,7 @@ impl AssetCatalog {
             include_all_app_icons: false,
             include_languages,
             development_region,
+            target_devices: Vec::new(),
             identifiers: IndexMap::new(),
             locales_used: HashSet::new(),
             force_bgra,
@@ -341,6 +344,12 @@ impl AssetCatalog {
     ) -> Self {
         self.alternate_app_icons = alternate_app_icons;
         self.include_all_app_icons = include_all_app_icons;
+        self
+    }
+
+    /// Restrict imageset images to the given `--target-device` idioms (`iphone`, `ipad`).
+    pub fn with_target_devices(mut self, target_devices: Vec<String>) -> Self {
+        self.target_devices = target_devices;
         self
     }
 
@@ -533,6 +542,14 @@ impl AssetCatalog {
                 _ => true,
             };
             if !idiom_applies {
+                continue;
+            }
+            // Xcode drops an imageset image of a device idiom that is not a target device;
+            // app icon sets are never filtered.
+            if matches!(idiom, "iphone" | "ipad")
+                && !self.target_devices.is_empty()
+                && !self.target_devices.iter().any(|d| d == idiom)
+            {
                 continue;
             }
             if self.platform == "macosx" && scale > 2 {
