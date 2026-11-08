@@ -4,7 +4,7 @@
 //! instead of CoreSVG and CoreGraphics, which are Apple's own on a Mac. The
 //! reference is `ref_samples/raster_output`, captured from Xcode 26.5 over
 //! `ref_samples/Raster.xcassets`.
-#![cfg(not(target_os = "macos"))]
+#![cfg(all(test, not(target_os = "macos")))]
 
 use actool::compiler;
 use std::collections::HashMap;
