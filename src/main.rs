@@ -1,6 +1,6 @@
 //! actool CLI entry point.
 
-use actool::{catalog, compiler, icon_bundle, symbols};
+use actool::{catalog, compiler, icon_bundle, print_contents, symbols};
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -116,21 +116,16 @@ fn main() -> ExitCode {
     };
 
     if cli.print_contents && cli.compile.is_none() {
-        match catalog::AssetCatalog::new(
+        let catalog = catalog::AssetCatalog::new(
             document.clone(),
             cli.platform.clone(),
             cli.minimum_deployment_target.clone(),
             None,
             None,
             None,
-        )
-        .parse()
-        {
-            Ok(_) => {
-                // TODO: emit catalog-contents plist. For parity we emit an
-                // empty container so downstream tooling doesn't crash.
-                print_plist_xml("com.apple.actool.catalog-contents", "(empty)");
-            }
+        );
+        match print_contents::catalog_contents(&catalog) {
+            Ok(contents) => print_contents_output(&cli.output_format, &contents),
             Err(e) => {
                 eprintln!("error: {e}");
                 return ExitCode::from(1);
@@ -282,9 +277,15 @@ fn print_version(format: &str) {
     }
 }
 
-fn print_plist_xml(_top_key: &str, _body: &str) {
-    // Minimal stub — full --print-contents implementation is out of scope
-    // of the rewrite's first milestone.
+fn print_contents_output(format: &str, contents: &print_contents::Value) {
+    if format == "human-readable-text" {
+        print!("{}", print_contents::to_human_text(contents));
+    } else {
+        print!(
+            "{}",
+            print_contents::to_plist_xml(print_contents::TOP_KEY, contents)
+        );
+    }
 }
 
 fn print_compilation_results(format: &str, output_files: &[PathBuf]) {

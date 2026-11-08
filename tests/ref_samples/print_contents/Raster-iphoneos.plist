@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.actool.catalog-contents</key>
+	<array>
+		<dict>
+			<key>children</key>
+			<array>
+				<dict>
+					<key>children</key>
+					<array>
+						<dict>
+							<key>filename</key>
+							<string>glyph.svg</string>
+							<key>idiom</key>
+							<string>universal</string>
+							<key>image</key>
+							<dict>
+								<key>height</key>
+								<real>24</real>
+								<key>width</key>
+								<real>24</real>
+							</dict>
+						</dict>
+					</array>
+					<key>filename</key>
+					<string>Glyph.imageset</string>
+				</dict>
+				<dict>
+					<key>children</key>
+					<array>
+						<dict>
+							<key>filename</key>
+							<string>vector.pdf</string>
+							<key>idiom</key>
+							<string>universal</string>
+							<key>image</key>
+							<dict>
+								<key>height</key>
+								<real>24</real>
+								<key>width</key>
+								<real>24</real>
+							</dict>
+						</dict>
+					</array>
+					<key>filename</key>
+					<string>Vector.imageset</string>
+				</dict>
+			</array>
+			<key>filename</key>
+			<string>Raster.xcassets</string>
+		</dict>
+	</array>
+</dict>
+</plist>

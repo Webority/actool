@@ -12,5 +12,6 @@ pub mod icon_render;
 pub mod name_hash;
 pub mod packer;
 pub mod pdf_raster;
+pub mod print_contents;
 pub mod svg_raster;
 pub mod symbols;
