@@ -37,6 +37,12 @@ anyhow = "1"
 regex = "1"
 crc32fast = "1"
 
+# Pure-Rust stand-ins for CoreSVG and CoreGraphics, which only macOS has. No font discovery:
+# a build machine's installed fonts must not change what an icon compiles to.
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+resvg = { version = "0.49", default-features = false, features = ["raster-images"] }
+hayro = "0.9"
+
 [dev-dependencies]
 tempfile = "3"
 

@@ -1,4 +1,8 @@
+/* com.apple.actool.document.notices */
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/DeviceSplit.xcassets:./AppIcon.appiconset/[][ipad][76x76][][][1x][][][][]: notice: 76x76@1x app icons only apply to iPad apps targeting releases of iOS prior to 10.0.
 /* com.apple.actool.compilation-results */
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone-ipad/compiled/AppIcon60x60@2x.png
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone-ipad/compiled/AppIcon76x76@2x~ipad.png
 /Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone-ipad/compiled/Assets.car
 /Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone-ipad/partial.plist
 

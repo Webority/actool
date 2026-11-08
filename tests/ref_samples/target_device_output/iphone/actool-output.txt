@@ -1,4 +1,6 @@
 /* com.apple.actool.compilation-results */
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone/compiled/AppIcon60x60@2x.png
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone/compiled/AppIcon76x76@2x~ipad.png
 /Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone/compiled/Assets.car
 /Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone/partial.plist
 

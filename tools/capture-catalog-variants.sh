@@ -1,7 +1,8 @@
 #!/bin/bash
-# Records Apple's actool output for two references: the device-family split (Catalog.xcassets
-# compiled for iPhone alone and for iPhone plus iPad, tests/ref_samples/target_device_output/) and
-# vector rasterisation (Raster.xcassets, one PDF and one SVG set, tests/ref_samples/raster_output/).
+# Records Apple's actool output for two references: the device-family split (DeviceSplit.xcassets,
+# images and a multi-size app icon that exist only for iPhone or only for iPad, compiled for iPhone
+# alone and for iPhone plus iPad, tests/ref_samples/target_device_output/) and vector rasterisation
+# (Raster.xcassets, one PDF and one SVG set, tests/ref_samples/raster_output/).
 # Run on a Mac with Xcode selected (or DEVELOPER_DIR set); compatible with macOS /bin/bash 3.2.
 set -euo pipefail
 
@@ -34,6 +35,9 @@ compile() {
     if [ -f "$out/compiled/Assets.car" ]; then
         xcrun assetutil --info "$out/compiled/Assets.car" > "$out/assets-info.json"
     fi
+    (cd "$out/compiled" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do
+        printf '%s\t%s\n' "${f#./}" "$(file -b "$f")"
+    done) > "$out/compiled-files.txt"
     {
         echo "Captured $(date -u '+%Y-%m-%dT%H:%M:%SZ') by tools/capture-catalog-variants.sh"
         echo "xcodebuild -version: $(xcodebuild -version | tr '\n' ' ')"
@@ -44,8 +48,8 @@ compile() {
     echo "$out: exit $status"
 }
 
-compile "$REF/Catalog.xcassets" "$REF/target_device_output/iphone" --target-device iphone
-compile "$REF/Catalog.xcassets" "$REF/target_device_output/iphone-ipad" --target-device iphone --target-device ipad
+compile "$REF/DeviceSplit.xcassets" "$REF/target_device_output/iphone" --app-icon AppIcon --target-device iphone
+compile "$REF/DeviceSplit.xcassets" "$REF/target_device_output/iphone-ipad" --app-icon AppIcon --target-device iphone --target-device ipad
 
 # Xcode 26.5's assetutil has no --extract, so the car and its --info are the raster reference.
 compile "$REF/Raster.xcassets" "$REF/raster_output" --target-device iphone

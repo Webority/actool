@@ -1,4 +1,4 @@
-Captured 2026-11-08T16:58:46Z by tools/capture-catalog-variants.sh
+Captured 2026-11-08T17:06:36Z by tools/capture-catalog-variants.sh
 xcodebuild -version: Xcode 26.5 Build version 17F42 
 actool: /Applications/Xcode_26.5.app/Contents/Developer/usr/bin/actool
 exit status: 0

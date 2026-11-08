@@ -1,5 +1,5 @@
-Captured 2026-11-08T16:58:45Z by tools/capture-catalog-variants.sh
+Captured 2026-11-08T17:06:35Z by tools/capture-catalog-variants.sh
 xcodebuild -version: Xcode 26.5 Build version 17F42 
 actool: /Applications/Xcode_26.5.app/Contents/Developer/usr/bin/actool
 exit status: 0
-command: actool --output-format human-readable-text --notices --warnings --output-partial-info-plist tests/ref_samples/target_device_output/iphone-ipad/partial.plist --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 15.1 --platform iphoneos --compile tests/ref_samples/target_device_output/iphone-ipad/compiled tests/ref_samples/Catalog.xcassets
+command: actool --output-format human-readable-text --notices --warnings --output-partial-info-plist tests/ref_samples/target_device_output/iphone-ipad/partial.plist --compress-pngs --enable-on-demand-resources YES --development-region en --app-icon AppIcon --target-device iphone --target-device ipad --minimum-deployment-target 15.1 --platform iphoneos --compile tests/ref_samples/target_device_output/iphone-ipad/compiled tests/ref_samples/DeviceSplit.xcassets
