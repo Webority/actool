@@ -6,6 +6,7 @@
 use crate::bom::BomWriter;
 use crate::car::{self, RenditionKeyParts};
 use crate::catalog::{AssetCatalog, Facet, IconImage};
+use crate::cgbi;
 use crate::icns;
 use crate::packer::{self, PackedImage};
 use anyhow::Result;
@@ -51,6 +52,7 @@ pub fn compile_catalog(
         include_languages,
         development_region,
         plist_localizations,
+        false,
     )
 }
 
@@ -72,6 +74,7 @@ pub fn compile_catalog_with_icons(
     include_languages: Option<Vec<String>>,
     development_region: Option<String>,
     plist_localizations: bool,
+    compress_pngs: bool,
 ) -> Result<Vec<PathBuf>> {
     fs::create_dir_all(output_dir)?;
     let has_icon = app_icon.is_some();
@@ -413,12 +416,22 @@ pub fn compile_catalog_with_icons(
             for set_name in catalog.app_icon_set_names() {
                 for loose in ios_loose_icons(&catalog.app_icon_images_for(&set_name)?, &set_name) {
                     let dest = output_dir.join(&loose.filename);
-                    match loose.resample_px {
-                        Some(px) => image::open(&loose.src)?
+                    match (loose.resample_px, compress_pngs) {
+                        (Some(px), false) => image::open(&loose.src)?
                             .resize_exact(px, px, image::imageops::FilterType::Lanczos3)
                             .save_with_format(&dest, image::ImageFormat::Png)?,
-                        None => {
+                        (None, false) => {
                             fs::copy(&loose.src, &dest)?;
+                        }
+                        (resample, true) => {
+                            let mut img = image::open(&loose.src)?;
+                            if let Some(px) = resample {
+                                img =
+                                    img.resize_exact(px, px, image::imageops::FilterType::Lanczos3);
+                            }
+                            let mut file = std::io::BufWriter::new(fs::File::create(&dest)?);
+                            cgbi::write_cgbi_png(&img.to_rgba8(), &mut file)?;
+                            std::io::Write::flush(&mut file)?;
                         }
                     }
                     output_files.push(dunce::canonicalize(&dest).unwrap_or(dest));

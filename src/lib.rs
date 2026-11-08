@@ -1,6 +1,7 @@
 pub mod bom;
 pub mod car;
 pub mod catalog;
+pub mod cgbi;
 pub mod compiler;
 pub mod deepmap2;
 pub mod icns;

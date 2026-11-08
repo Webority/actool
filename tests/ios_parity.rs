@@ -525,6 +525,32 @@ fn ios_appicon_no_subtype_without_60pt_at_3x() {
     assert!(!any_1792, "no subtype-1792 expected without a 60pt@3x icon");
 }
 
+fn png_chunks(bytes: &[u8]) -> Vec<([u8; 4], Vec<u8>)> {
+    let mut chunks = Vec::new();
+    let mut at = 8;
+    while at + 12 <= bytes.len() {
+        let len = u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
+        let kind: [u8; 4] = bytes[at + 4..at + 8].try_into().unwrap();
+        chunks.push((kind, bytes[at + 8..at + 8 + len].to_vec()));
+        at += 12 + len;
+    }
+    chunks
+}
+
+fn inflate_idat(chunks: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
+    use std::io::Read;
+    let data: Vec<u8> = chunks
+        .iter()
+        .filter(|c| c.0 == *b"IDAT")
+        .flat_map(|c| c.1.iter().copied())
+        .collect();
+    let mut out = Vec::new();
+    flate2::read::DeflateDecoder::new(&data[..])
+        .read_to_end(&mut out)
+        .unwrap();
+    out
+}
+
 /// Xcode's single-size icon (one universal `ios` 1024 image) compiles as
 /// Apple's actool does in tests/ref_samples/ios_single_output: the 1024
 /// image under the phone and pad idioms at icon index 1, a MultiSized facet
@@ -539,12 +565,13 @@ fn ios_single_size_appicon_matches_actool() {
     ] {
         let out = workspace_tmp(&format!("ios_single_{case}"));
         let plist = out.join("partial.plist");
-        compiler::compile_catalog(
+        compiler::compile_catalog_with_icons(
             Path::new("tests/ref_samples/IosSingleIcon.xcassets"),
             &out,
             platform,
             target,
             Some("AppIcon"),
+            &compiler::IconSelection::default(),
             Some(&plist),
             None,
             None,
@@ -552,6 +579,7 @@ fn ios_single_size_appicon_matches_actool() {
             None,
             None,
             true,
+            platform == "iphoneos",
         )
         .expect("compile");
 
@@ -559,8 +587,50 @@ fn ios_single_size_appicon_matches_actool() {
             ("AppIcon60x60@2x.png", 120),
             ("AppIcon76x76@2x~ipad.png", 152),
         ] {
-            let img = image::open(out.join(file)).unwrap_or_else(|e| panic!("{case} {file}: {e}"));
-            assert_eq!((img.width(), img.height()), (px, px), "{case} {file}");
+            // A device icon is CgBI, which ordinary decoders refuse, so the size comes from IHDR.
+            let bytes =
+                std::fs::read(out.join(file)).unwrap_or_else(|e| panic!("{case} {file}: {e}"));
+            let ihdr = png_chunks(&bytes)
+                .into_iter()
+                .find(|c| c.0 == *b"IHDR")
+                .unwrap_or_else(|| panic!("{case} {file}: no IHDR"))
+                .1;
+            let w = u32::from_be_bytes(ihdr[0..4].try_into().unwrap());
+            let h = u32::from_be_bytes(ihdr[4..8].try_into().unwrap());
+            assert_eq!((w, h), (px, px), "{case} {file}");
+        }
+        let compiled = std::fs::read(out.join("AppIcon60x60@2x.png")).unwrap();
+        let chunks = png_chunks(&compiled);
+        if platform == "iphoneos" {
+            assert_eq!(chunks[0].0, *b"CgBI", "{case}: CgBI first");
+        }
+        if case == "iphoneos-26.0" {
+            let want = std::fs::read(
+                reference
+                    .join(case)
+                    .join("compiled")
+                    .join("AppIcon60x60@2x.png"),
+            )
+            .unwrap();
+            let want_chunks = png_chunks(&want);
+            assert_eq!(chunks[0].0, *b"CgBI", "{case}: CgBI first");
+            assert_eq!(chunks[0].1, [0x50, 0x00, 0x20, 0x06], "{case}: CgBI data");
+            let ihdr =
+                |c: &[([u8; 4], Vec<u8>)]| c.iter().find(|k| k.0 == *b"IHDR").unwrap().1.clone();
+            assert_eq!(ihdr(&chunks), ihdr(&want_chunks), "{case}: IHDR");
+            assert_eq!(
+                inflate_idat(&chunks),
+                inflate_idat(&want_chunks),
+                "{case}: pixel rows"
+            );
+        } else if case == "iphonesimulator-15.1" {
+            assert!(
+                chunks.iter().all(|c| c.0 != *b"CgBI"),
+                "{case}: no CgBI chunk"
+            );
+            png::Decoder::new(std::io::Cursor::new(&compiled))
+                .read_info()
+                .expect("png decodes");
         }
         assert_eq!(
             std::fs::read_to_string(&plist).unwrap(),

@@ -1,0 +1,22 @@
+{
+  "$schema": "~/.claude/schemas/map.schema.json",
+  "schemaVersion": 1,
+  "areas": {
+    "src": {
+      "what": "The asset catalog compiler: catalogs in, Assets.car, icons and the partial Info.plist out",
+      "layer": "tool"
+    },
+    "tests": {
+      "what": "Parity tests against real Xcode actool output in tests/ref_samples",
+      "layer": "tool"
+    },
+    "tools": {
+      "what": "Capture and probe scripts run on a Mac to record what Xcode's actool produces",
+      "layer": "tool"
+    },
+    "docs": {
+      "what": "Design notes on atlas packing, icon bundles and icon shading",
+      "layer": "tool"
+    }
+  }
+}

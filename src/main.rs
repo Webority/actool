@@ -234,6 +234,7 @@ fn main() -> ExitCode {
             include_languages,
             cli.development_region.clone(),
             plist_l10n,
+            cli.compress_pngs,
         ) {
             Ok(f) => f,
             Err(e) => {
