@@ -1508,9 +1508,16 @@ impl Rendition {
                 && (&self.pixel_format == b"BGRA" || &self.pixel_format == b" 8AG");
 
             let mut pixel_data = self.pixel_data.clone();
+            // The row stride the stored rows really have; the bytes-per-row TLV states it.
+            let mut stored_bpr = self.width * 4;
             if use_aligned {
                 let dmp2_min = min_dmp2_version(&self.platform);
-                let will_try_dmp2 = use_dmp2 && deploy_ver >= dmp2_min && pixel_data.len() > 256;
+                // deepmap2 is Apple's vImage encoder, present only on macOS: elsewhere the rows
+                // must not be padded for a deepmap2 layout the lzfse fallback then contradicts.
+                let will_try_dmp2 = use_dmp2
+                    && deploy_ver >= dmp2_min
+                    && pixel_data.len() > 256
+                    && deepmap2::is_available();
                 let actual_bpp: u32 = if &self.pixel_format == b"BGRA" { 4 } else { 2 };
                 let padded_bpr = if will_try_dmp2 {
                     aligned_bytes_per_row(self.width, &self.pixel_format)
@@ -1528,6 +1535,7 @@ impl Rendition {
                     }
                     pixel_data = padded;
                 }
+                stored_bpr = padded_bpr;
             }
 
             let opaque = !self.force_non_opaque
@@ -1559,11 +1567,8 @@ impl Rendition {
             };
             let bpr = if actual_comp == 11 {
                 aligned_bytes_per_row(self.width, &self.pixel_format)
-            } else if use_aligned {
-                let actual_bpp: u32 = if &self.pixel_format == b"BGRA" { 4 } else { 2 };
-                (self.width * actual_bpp).div_ceil(32) * 32
             } else {
-                self.width * 4
+                stored_bpr
             };
             tlv.extend(tlv_header(0x03EF, 4));
             tlv.extend_from_slice(&u32::to_le_bytes(bpr));
