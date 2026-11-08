@@ -1,0 +1,99 @@
+[
+  {
+    "Appearances" : {
+      "UIAppearanceAny" : 0,
+      "UIAppearanceDark" : 1
+    },
+    "AssetStorageVersion" : "Xcode 26.5 (17F42) via AssetCatalogSimulatorAgent",
+    "Authoring Tool" : "@(#)PROGRAM:CoreThemeDefinition  PROJECT:CoreThemeDefinition-653.4  [IIO-2784.5.4]",
+    "CoreUIVersion" : 975,
+    "DumpToolVersion" : 1011.4,
+    "Key Format" : [
+      "kCRThemeAppearanceName",
+      "kCRThemeLocalizationName",
+      "kCRThemeScaleName",
+      "kCRThemeIdiomName",
+      "kCRThemeSubtypeName",
+      "kCRThemeIdentifierName",
+      "kCRThemeElementName",
+      "kCRThemePartName"
+    ],
+    "MainVersion" : "@(#)PROGRAM:CoreUI  PROJECT:CoreUI-975",
+    "Platform" : "ios",
+    "PlatformVersion" : "15.1",
+    "SchemaVersion" : 2,
+    "StorageVersion" : 17,
+    "Timestamp" : 1794157125
+  },
+  {
+    "AssetType" : "Color",
+    "Color components" : [
+      0.20000000298023224,
+      0.40000000596046448,
+      0.80000001192092896,
+      1
+    ],
+    "Colorspace" : "srgb",
+    "Idiom" : "universal",
+    "Name" : "TestAccent",
+    "NameIdentifier" : 7953,
+    "Scale" : 1,
+    "SHA1Digest" : "9EC0052896F60FB62C83EDBDA0AFF39D27A92E30FDB2B0772B9F814996D86367",
+    "SizeOnDisk" : 260
+  },
+  {
+    "Appearance" : "UIAppearanceDark",
+    "AssetType" : "Color",
+    "Color components" : [
+      0.40000000596046448,
+      0.60000002384185791,
+      1,
+      1
+    ],
+    "Colorspace" : "srgb",
+    "Idiom" : "universal",
+    "Name" : "TestAccent",
+    "NameIdentifier" : 7953,
+    "Scale" : 1,
+    "SHA1Digest" : "50A9043135D947B3B0B368C6ADF11A049369CB22FAAFFE0314CC8BE506B0F136",
+    "SizeOnDisk" : 260
+  },
+  {
+    "AssetType" : "Image",
+    "BitsPerComponent" : 8,
+    "ColorModel" : "Monochrome",
+    "Colorspace" : "gray gamma 22",
+    "Compression" : "deepmap2",
+    "Encoding" : "Gray",
+    "Idiom" : "universal",
+    "Name" : "TemplateIcon",
+    "NameIdentifier" : 4782,
+    "Opaque" : false,
+    "PixelHeight" : 16,
+    "PixelWidth" : 16,
+    "RenditionName" : "icon.png",
+    "Scale" : 1,
+    "SHA1Digest" : "BA5C450846587FBA9FDE0347E210AA087CDECD683BB5AD999AE7FB63636B4CBF",
+    "SizeOnDisk" : 399,
+    "Template Mode" : "template"
+  },
+  {
+    "AssetType" : "Image",
+    "BitsPerComponent" : 8,
+    "ColorModel" : "Monochrome",
+    "Colorspace" : "gray gamma 22",
+    "Compression" : "deepmap2",
+    "Encoding" : "Gray",
+    "Idiom" : "universal",
+    "Name" : "TemplateIcon",
+    "NameIdentifier" : 4782,
+    "Opaque" : false,
+    "PixelHeight" : 32,
+    "PixelWidth" : 32,
+    "RenditionName" : "icon@2x.png",
+    "Scale" : 2,
+    "SHA1Digest" : "E8F77458458833E67F06B10BB4F990F63E24F7B2E57CA1F38B17838C4170417B",
+    "SizeOnDisk" : 505,
+    "Template Mode" : "template"
+  }
+]

@@ -1,0 +1,4 @@
+/* com.apple.actool.compilation-results */
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/raster_output/compiled/Assets.car
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/raster_output/partial.plist
+

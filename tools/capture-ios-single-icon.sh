@@ -1,14 +1,17 @@
 #!/bin/bash
-# Records Apple's actool output for an iOS app icon in Xcode's single-size form
-# (tests/ref_samples/IosSingleIcon.xcassets), the reference the single-size icon path is tested against.
-# Run on a Mac with Xcode selected, from anywhere; writes tests/ref_samples/ios_single_output/<case>/.
+# Records Apple's actool output for an iOS app icon in Xcode's single-size form: the plain icon
+# (tests/ref_samples/IosSingleIcon.xcassets into ios_single_output/<case>/) and the icon with dark and
+# tinted appearances (IosVariantIcon.xcassets into ios_variant_output/<case>/), the references the
+# single-size icon path is tested against.
+# Run on a Mac with Xcode selected (or DEVELOPER_DIR set), from anywhere.
 # Compatible with macOS /bin/bash 3.2.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
-CATALOG="$ROOT/tests/ref_samples/IosSingleIcon.xcassets"
-OUT_ROOT="$ROOT/tests/ref_samples/ios_single_output"
+# catalog, output folder
+CATALOGS="IosSingleIcon ios_single_output
+IosVariantIcon ios_variant_output"
 
 if [ "$(uname -s)" != "Darwin" ]; then
     echo "capture-ios-single-icon.sh: must run on macOS (Apple's actool records the reference)" >&2
@@ -22,6 +25,9 @@ CASES="iphoneos-15.1 iphoneos 15.1
 iphoneos-26.0 iphoneos 26.0
 iphonesimulator-15.1 iphonesimulator 15.1"
 
+echo "$CATALOGS" | while read -r catalog_name out_name; do
+CATALOG="$ROOT/tests/ref_samples/$catalog_name.xcassets"
+OUT_ROOT="$ROOT/tests/ref_samples/$out_name"
 echo "$CASES" | while read -r name platform target; do
     out="$OUT_ROOT/$name"
     rm -rf "$out"
@@ -49,7 +55,8 @@ echo "$CASES" | while read -r name platform target; do
         echo "exit status: $status"
         echo "command: actool ${args[*]}"
     } | sed "s#$ROOT/##g" > "$out/CAPTURE.txt"
-    echo "$name: exit $status, $(wc -l < "$out/compiled-files.txt" | tr -d ' ') files"
+    echo "$out_name/$name: exit $status, $(wc -l < "$out/compiled-files.txt" | tr -d ' ') files"
+done
 done
 
-echo "Captured. Review tests/ref_samples/ios_single_output/*/CAPTURE.txt, then commit tests/ref_samples."
+echo "Captured. Review tests/ref_samples/ios_{single,variant}_output/*/CAPTURE.txt, then commit tests/ref_samples."

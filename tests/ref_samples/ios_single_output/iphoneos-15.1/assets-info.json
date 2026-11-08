@@ -6,23 +6,24 @@
     "AssetStorageVersion" : "Xcode 26.5 (17F42) via AssetCatalogSimulatorAgent",
     "Authoring Tool" : "@(#)PROGRAM:CoreThemeDefinition  PROJECT:CoreThemeDefinition-653.4  [IIO-2784.5.4]",
     "CoreUIVersion" : 975,
-    "DumpToolVersion" : 975,
+    "DumpToolVersion" : 1011.4,
     "Key Format" : [
+      "kCRThemeAppearanceName",
+      "kCRThemeLocalizationName",
       "kCRThemeScaleName",
       "kCRThemeIdiomName",
       "kCRThemeSubtypeName",
       "kCRThemeDimension2Name",
       "kCRThemeIdentifierName",
       "kCRThemeElementName",
-      "kCRThemePartName",
-      "kCRThemeStateName"
+      "kCRThemePartName"
     ],
     "MainVersion" : "@(#)PROGRAM:CoreUI  PROJECT:CoreUI-975",
     "Platform" : "ios",
     "PlatformVersion" : "15.1",
     "SchemaVersion" : 2,
     "StorageVersion" : 17,
-    "Timestamp" : 1792307954
+    "Timestamp" : 1794157121
   },
   {
     "AssetType" : "Icon Image",
@@ -41,8 +42,7 @@
     "RenditionName" : "icon1024.png",
     "Scale" : 1,
     "SHA1Digest" : "71189BDB2DD57BEEE27C61629D65000C3DFDF3149603DDF5EA6F020BDD79FA69",
-    "SizeOnDisk" : 3459,
-    "State" : "Normal"
+    "SizeOnDisk" : 3459
   },
   {
     "AssetType" : "Icon Image",
@@ -61,8 +61,7 @@
     "RenditionName" : "icon1024.png",
     "Scale" : 1,
     "SHA1Digest" : "71189BDB2DD57BEEE27C61629D65000C3DFDF3149603DDF5EA6F020BDD79FA69",
-    "SizeOnDisk" : 3459,
-    "State" : "Normal"
+    "SizeOnDisk" : 3459
   },
   {
     "AssetType" : "MultiSized Image",
@@ -74,8 +73,7 @@
     "SizeOnDisk" : 236,
     "Sizes" : [
       "1024x1024 index:1 idiom:phone"
-    ],
-    "State" : "Normal"
+    ]
   },
   {
     "AssetType" : "MultiSized Image",
@@ -87,7 +85,6 @@
     "SizeOnDisk" : 236,
     "Sizes" : [
       "1024x1024 index:1 idiom:pad"
-    ],
-    "State" : "Normal"
+    ]
   }
 ]

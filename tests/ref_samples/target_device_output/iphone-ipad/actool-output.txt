@@ -1,0 +1,4 @@
+/* com.apple.actool.compilation-results */
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone-ipad/compiled/Assets.car
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/target_device_output/iphone-ipad/partial.plist
+

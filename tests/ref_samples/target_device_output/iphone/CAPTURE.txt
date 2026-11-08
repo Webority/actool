@@ -1,0 +1,5 @@
+Captured 2026-11-08T16:58:44Z by tools/capture-catalog-variants.sh
+xcodebuild -version: Xcode 26.5 Build version 17F42 
+actool: /Applications/Xcode_26.5.app/Contents/Developer/usr/bin/actool
+exit status: 0
+command: actool --output-format human-readable-text --notices --warnings --output-partial-info-plist tests/ref_samples/target_device_output/iphone/partial.plist --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --minimum-deployment-target 15.1 --platform iphoneos --compile tests/ref_samples/target_device_output/iphone/compiled tests/ref_samples/Catalog.xcassets

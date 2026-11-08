@@ -1,6 +1,6 @@
 /* com.apple.actool.compilation-results */
-tests/ref_samples/ios_single_output/iphoneos-26.0/compiled/AppIcon60x60@2x.png
-tests/ref_samples/ios_single_output/iphoneos-26.0/compiled/AppIcon76x76@2x~ipad.png
-tests/ref_samples/ios_single_output/iphoneos-26.0/compiled/Assets.car
-tests/ref_samples/ios_single_output/iphoneos-26.0/partial.plist
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/ios_single_output/iphoneos-26.0/compiled/AppIcon60x60@2x.png
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/ios_single_output/iphoneos-26.0/compiled/AppIcon76x76@2x~ipad.png
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/ios_single_output/iphoneos-26.0/compiled/Assets.car
+/Users/navneet/Code/Webority/libraries/actool/tests/ref_samples/ios_single_output/iphoneos-26.0/partial.plist
 
