@@ -129,7 +129,7 @@ pub fn is_icon_bundle(path: &Path) -> bool {
     path.extension().and_then(|s| s.to_str()) == Some("icon")
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "EX-1")]
 pub fn compile_icon_bundle(
     icon_path: &Path,
     output_dir: &Path,
@@ -1093,7 +1093,7 @@ fn find_all_source_images(bundle: &Path, json: &serde_json::Value) -> Vec<PathBu
     out
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "EX-1")]
 fn build_icon_car(
     car_path: &Path,
     icon_name: &str,

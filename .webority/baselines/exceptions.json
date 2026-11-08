@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "id": "EX-1",
+    "rule": "clippy::too_many_arguments",
+    "paths": ["src/compiler.rs", "src/icon_bundle.rs"],
+    "reason": "The catalog and icon compile entry points mirror the upstream actool fork's flag set one parameter per flag, and the fork stays close to upstream for merges until our own asset compiler replaces it (TASK-07764).",
+    "approvedBy": "TASK-18827"
+  }
+]

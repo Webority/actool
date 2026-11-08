@@ -23,7 +23,7 @@ pub struct IconSelection {
     pub include_all_app_icons: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "EX-1")]
 pub fn compile_catalog(
     xcassets_path: &Path,
     output_dir: &Path,
@@ -59,7 +59,7 @@ pub fn compile_catalog(
 /// `compile_catalog` with alternate icon sets: every selected `.appiconset` lands in the car,
 /// each gets its loose home-screen PNGs, and the iOS partial Info.plist lists the alternates
 /// under `CFBundleAlternateIcons` beside the primary, as Apple's actool writes them.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "EX-1")]
 pub fn compile_catalog_with_icons(
     xcassets_path: &Path,
     output_dir: &Path,

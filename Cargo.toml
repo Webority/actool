@@ -1,3 +1,13 @@
+[workspace]
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+undocumented_unsafe_blocks = "deny"
+dbg_macro = "deny"
+todo = "deny"
+allow_attributes_without_reason = "deny"
+
 [package]
 name = "actool"
 version = "2.2.4"
@@ -30,9 +40,5 @@ crc32fast = "1"
 [dev-dependencies]
 tempfile = "3"
 
-[lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-undocumented_unsafe_blocks = "deny"
-dbg_macro = "deny"
-todo = "deny"
+[lints]
+workspace = true

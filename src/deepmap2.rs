@@ -5,7 +5,7 @@
 //! better compression than plain LZFSE for image data.
 
 use std::ffi::c_void;
-use std::os::raw::{c_ulong, c_ushort};
+use std::os::raw::c_ulong;
 use std::ptr;
 #[cfg(target_os = "macos")]
 use std::sync::OnceLock;
@@ -158,10 +158,6 @@ pub fn make_celm_dmp2(
     out.extend_from_slice(dmp2_data);
     out
 }
-
-// Unused: silences warnings about unused types on non-macOS builds.
-#[allow(dead_code)]
-fn _unused_marker(_: *mut c_ushort) {}
 
 #[cfg(test)]
 mod tests {
