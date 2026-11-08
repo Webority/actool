@@ -5,7 +5,7 @@
 
 use crate::bom::BomWriter;
 use crate::car::{self, RenditionKeyParts};
-use crate::catalog::{AssetCatalog, Facet, IconImage};
+use crate::catalog::{APPEARANCE_TINTABLE, AssetCatalog, Facet, IconImage};
 use crate::cgbi;
 use crate::icns;
 use crate::packer::{self, PackedImage};
@@ -363,15 +363,17 @@ pub fn compile_catalog_with_icons(
     let has_appearances = renditions.iter().any(|r| r.appearance != 0);
     if car::is_idiom_platform(platform) {
         // iOS always emits APPEARANCEKEYS, declaring the wildcard appearance
-        // (UIAppearanceAny=0) even when no asset has a dark variant.
+        // (UIAppearanceAny=0) even when no asset has a variant, then a name for
+        // each appearance a rendition uses, in name order as Apple lists them.
+        let uses = |value: u16| renditions.iter().any(|r| r.appearance == value);
         let mut ap_entries: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
-        let mut v_any = Vec::new();
-        v_any.extend_from_slice(&0u16.to_le_bytes());
-        ap_entries.push((b"UIAppearanceAny".to_vec(), v_any));
-        if has_appearances {
-            let mut v_dark = Vec::new();
-            v_dark.extend_from_slice(&1u16.to_le_bytes());
-            ap_entries.push((b"UIAppearanceDark".to_vec(), v_dark));
+        if uses(APPEARANCE_TINTABLE) {
+            let name = b"ISAppearanceTintable".to_vec();
+            ap_entries.push((name, APPEARANCE_TINTABLE.to_le_bytes().to_vec()));
+        }
+        ap_entries.push((b"UIAppearanceAny".to_vec(), 0u16.to_le_bytes().to_vec()));
+        if uses(1) {
+            ap_entries.push((b"UIAppearanceDark".to_vec(), 1u16.to_le_bytes().to_vec()));
         }
         bom.add_tree("APPEARANCEKEYS", &ap_entries, 4096);
     } else if has_appearances {

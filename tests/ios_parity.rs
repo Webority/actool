@@ -673,3 +673,239 @@ fn ios_single_size_appicon_matches_actool() {
         );
     }
 }
+
+fn be16(b: &[u8], off: usize) -> anyhow::Result<u16> {
+    let s = b
+        .get(off..off + 2)
+        .ok_or_else(|| anyhow::anyhow!("short read at {off}"))?;
+    Ok(u16::from_be_bytes(s.try_into()?))
+}
+
+fn be32(b: &[u8], off: usize) -> anyhow::Result<u32> {
+    let s = b
+        .get(off..off + 4)
+        .ok_or_else(|| anyhow::anyhow!("short read at {off}"))?;
+    Ok(u32::from_be_bytes(s.try_into()?))
+}
+
+fn le16(b: &[u8], off: usize) -> anyhow::Result<u16> {
+    let s = b
+        .get(off..off + 2)
+        .ok_or_else(|| anyhow::anyhow!("short read at {off}"))?;
+    Ok(u16::from_le_bytes(s.try_into()?))
+}
+
+fn le32(b: &[u8], off: usize) -> anyhow::Result<u32> {
+    let s = b
+        .get(off..off + 4)
+        .ok_or_else(|| anyhow::anyhow!("short read at {off}"))?;
+    Ok(u32::from_le_bytes(s.try_into()?))
+}
+
+/// A compiled `.car` read back through its BOM container.
+struct Car {
+    data: Vec<u8>,
+    blocks: Vec<(usize, usize)>,
+    named: std::collections::HashMap<String, u32>,
+}
+
+impl Car {
+    fn open(path: &Path) -> anyhow::Result<Car> {
+        let data = std::fs::read(path)?;
+        anyhow::ensure!(
+            data.starts_with(b"BOMStore"),
+            "{}: not a BOM",
+            path.display()
+        );
+        let index = data
+            .get(be32(&data, 16)? as usize..)
+            .ok_or_else(|| anyhow::anyhow!("block index out of range"))?;
+        let mut blocks = Vec::new();
+        for i in 0..be32(index, 0)? as usize {
+            blocks.push((
+                be32(index, 4 + i * 8)? as usize,
+                be32(index, 8 + i * 8)? as usize,
+            ));
+        }
+        let vars = data
+            .get(be32(&data, 24)? as usize..)
+            .ok_or_else(|| anyhow::anyhow!("variables out of range"))?;
+        let mut named = std::collections::HashMap::new();
+        let mut at = 4;
+        for _ in 0..be32(vars, 0)? {
+            let len = *vars
+                .get(at + 4)
+                .ok_or_else(|| anyhow::anyhow!("short name"))? as usize;
+            let name = vars
+                .get(at + 5..at + 5 + len)
+                .ok_or_else(|| anyhow::anyhow!("short name"))?;
+            named.insert(String::from_utf8_lossy(name).into_owned(), be32(vars, at)?);
+            at += 5 + len;
+        }
+        Ok(Car {
+            data,
+            blocks,
+            named,
+        })
+    }
+
+    fn block(&self, index: u32) -> anyhow::Result<&[u8]> {
+        let (addr, len) = *self
+            .blocks
+            .get(index as usize)
+            .ok_or_else(|| anyhow::anyhow!("no block {index}"))?;
+        self.data
+            .get(addr..addr + len)
+            .ok_or_else(|| anyhow::anyhow!("block {index} out of range"))
+    }
+
+    fn named_block(&self, name: &str) -> anyhow::Result<&[u8]> {
+        let index = self
+            .named
+            .get(name)
+            .ok_or_else(|| anyhow::anyhow!("no {name} block"))?;
+        self.block(*index)
+    }
+
+    /// The (key, value) pairs of a tree, left to right.
+    fn tree(&self, name: &str) -> anyhow::Result<Vec<(&[u8], &[u8])>> {
+        fn walk<'a>(
+            car: &'a Car,
+            index: u32,
+            out: &mut Vec<(&'a [u8], &'a [u8])>,
+        ) -> anyhow::Result<()> {
+            let node = car.block(index)?;
+            let count = be16(node, 2)? as usize;
+            if be16(node, 0)? != 0 {
+                for i in 0..count {
+                    let value = car.block(be32(node, 12 + i * 8)?)?;
+                    let key = car.block(be32(node, 16 + i * 8)?)?;
+                    out.push((key, value));
+                }
+            } else {
+                walk(car, be32(node, 12)?, out)?;
+                for i in 0..count {
+                    walk(car, be32(node, 16 + i * 8 + 4)?, out)?;
+                }
+            }
+            Ok(())
+        }
+        let mut out = Vec::new();
+        walk(self, be32(self.named_block(name)?, 8)?, &mut out)?;
+        Ok(out)
+    }
+
+    /// (name, value) for each APPEARANCEKEYS entry.
+    fn appearance_names(&self) -> anyhow::Result<Vec<(String, u16)>> {
+        let mut names = Vec::new();
+        for (key, value) in self.tree("APPEARANCEKEYS")? {
+            names.push((String::from_utf8_lossy(key).into_owned(), le16(value, 0)?));
+        }
+        names.sort();
+        Ok(names)
+    }
+
+    /// (element, part, idiom, subtype, scale, appearance, dim2, width, height)
+    /// of every rendition, read from its key and CSI header.
+    fn rendition_set(&self) -> anyhow::Result<Vec<[u32; 9]>> {
+        let format = self.named_block("KEYFORMAT")?;
+        let attributes: Vec<u32> = (0..le32(format, 8)? as usize)
+            .map(|i| le32(format, 12 + i * 4))
+            .collect::<anyhow::Result<_>>()?;
+        let mut rows = Vec::new();
+        for (key, csi) in self.tree("RENDITIONS")? {
+            let attribute = |id: u32| -> anyhow::Result<u32> {
+                match attributes.iter().position(|a| *a == id) {
+                    Some(at) => Ok(le16(key, at * 2)? as u32),
+                    None => Ok(0),
+                }
+            };
+            rows.push([
+                attribute(1)?,
+                attribute(2)?,
+                attribute(15)?,
+                attribute(16)?,
+                attribute(12)?,
+                attribute(7)?,
+                attribute(9)?,
+                le32(csi, 12)?,
+                le32(csi, 16)?,
+            ]);
+        }
+        rows.sort();
+        Ok(rows)
+    }
+}
+
+fn variant_icon_case_matches(case: &str, platform: &str, target: &str) -> anyhow::Result<()> {
+    let reference = Path::new("tests/ref_samples/ios_variant_output").join(case);
+    let out = workspace_tmp(&format!("ios_variant_{case}"));
+    let plist = out.join("partial.plist");
+    compiler::compile_catalog_with_icons(
+        Path::new("tests/ref_samples/IosVariantIcon.xcassets"),
+        &out,
+        platform,
+        target,
+        Some("AppIcon"),
+        &compiler::IconSelection::default(),
+        Some(&plist),
+        None,
+        None,
+        "default",
+        None,
+        Some("en".to_string()),
+        true,
+        platform == "iphoneos",
+        &["iphone".to_string(), "ipad".to_string()],
+    )?;
+
+    let want = Car::open(&reference.join("compiled/Assets.car"))?;
+    let got = Car::open(&out.join("Assets.car"))?;
+    let want_renditions = want.rendition_set()?;
+    assert_eq!(
+        want_renditions.len(),
+        8,
+        "{case}: Apple's car holds 6 icons and 2 MultiSized"
+    );
+    assert_eq!(got.rendition_set()?, want_renditions, "{case}: renditions");
+    assert_eq!(
+        got.appearance_names()?,
+        want.appearance_names()?,
+        "{case}: APPEARANCEKEYS"
+    );
+
+    let listed = std::fs::read_to_string(reference.join("compiled-files.txt"))?;
+    let mut want_files: Vec<String> = listed
+        .lines()
+        .filter_map(|line| line.split('\t').next())
+        .map(str::to_string)
+        .collect();
+    want_files.sort();
+    let mut got_files: Vec<String> = std::fs::read_dir(&out)?
+        .map(|entry| entry.map(|e| e.file_name().to_string_lossy().into_owned()))
+        .collect::<Result<_, _>>()?;
+    got_files.retain(|name| name != "partial.plist");
+    got_files.sort();
+    assert_eq!(got_files, want_files, "{case}: loose files");
+
+    assert_eq!(
+        plist::Value::from_file(&plist)?,
+        plist::Value::from_file(reference.join("partial.plist"))?,
+        "{case}: partial plist"
+    );
+    Ok(())
+}
+
+/// An app icon with dark and tinted variants compiles as Xcode 26.5's actool does
+/// (tests/ref_samples/ios_variant_output): a phone and a pad icon per appearance, one
+/// MultiSized facet per idiom, and loose home-screen PNGs from the any-appearance image only.
+#[test]
+fn ios_dark_and_tinted_appicon_matches_actool() {
+    for (case, platform, target) in [
+        ("iphoneos-15.1", "iphoneos", "15.1"),
+        ("iphoneos-26.0", "iphoneos", "26.0"),
+        ("iphonesimulator-15.1", "iphonesimulator", "15.1"),
+    ] {
+        variant_icon_case_matches(case, platform, target).unwrap();
+    }
+}

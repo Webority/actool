@@ -856,12 +856,7 @@ impl AssetCatalog {
             // actool files under both the phone and the pad idiom at icon
             // index 1, and resamples into the loose home-screen PNGs.
             let single_size = is_single_size_ios_icon(img_info, &self.platform);
-            if single_size && img_info.get("appearances").is_some() {
-                anyhow::bail!(
-                    "{}: dark and tinted app icon variants are not supported",
-                    item.display()
-                );
-            }
+            let appearance = appearance_from_json(img_info);
             let icon_rend_start = renditions.len();
 
             let lower_filename = filename.to_ascii_lowercase();
@@ -884,6 +879,7 @@ impl AssetCatalog {
                     element: car::ELEMENT_UNIVERSAL,
                     part: car::PART_ICON,
                     scale: 1,
+                    appearance,
                     dim2,
                     layout: car::LAYOUT_PDF,
                     pixel_format: *car::PIXELFMT_SVG,
@@ -926,6 +922,7 @@ impl AssetCatalog {
                             pixel_data: pd,
                             pixel_format: pf,
                             layout: car::LAYOUT_ONE_PART_SCALE,
+                            appearance,
                             dim2,
                             template_rendering_intent: 0,
                             is_svg_rasterization: true,
@@ -963,6 +960,7 @@ impl AssetCatalog {
                     pixel_data: pixel_data.clone(),
                     pixel_format,
                     layout: car::LAYOUT_ONE_PART_SCALE,
+                    appearance,
                     dim2,
                     template_rendering_intent: 0,
                     colorspace_id: car::colorspace_for_pixel_format(&pixel_format),
@@ -990,6 +988,7 @@ impl AssetCatalog {
                 .find(|r| {
                     r.idiom == car::idiom_value("iphone")
                         && r.scale == 3
+                        && r.appearance == 0
                         && r.dim2 == dim2_60
                         && r.part == car::PART_ICON
                 })
@@ -1518,6 +1517,10 @@ impl AssetCatalog {
                 ) {
                     continue;
                 }
+                // Apple's loose home-screen PNGs come from the any-appearance image only.
+                if appearance_from_json(img_info) != 0 {
+                    continue;
+                }
                 if is_single_size_ios_icon(img_info, &self.platform) {
                     // actool resamples the 1024 source into the iPhone 60pt@2x
                     // and iPad 76pt@2x home-screen icons.
@@ -1647,13 +1650,20 @@ fn parse_scale(img_info: &Value) -> u32 {
     s.trim_end_matches('x').parse().unwrap_or(1)
 }
 
+/// The `ISAppearanceTintable` value Xcode 26.5's actool writes into the car's
+/// APPEARANCEKEYS and the rendition key (tests/ref_samples/ios_variant_output).
+pub const APPEARANCE_TINTABLE: u16 = 10;
+
 fn appearance_from_json(v: &Value) -> u16 {
     if let Some(arr) = v.get("appearances").and_then(|x| x.as_array()) {
         for app in arr {
-            if app.get("appearance").and_then(|s| s.as_str()) == Some("luminosity")
-                && app.get("value").and_then(|s| s.as_str()) == Some("dark")
-            {
-                return 1;
+            if app.get("appearance").and_then(|s| s.as_str()) != Some("luminosity") {
+                continue;
+            }
+            match app.get("value").and_then(|s| s.as_str()) {
+                Some("dark") => return 1,
+                Some("tinted") => return APPEARANCE_TINTABLE,
+                _ => {}
             }
         }
     }
