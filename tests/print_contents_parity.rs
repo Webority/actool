@@ -1,6 +1,8 @@
 //! `--print-contents` parity: the contents tree of each reference catalog, parsed as a plist,
 //! equals the plist Apple's actool wrote for it. Compared as parsed values, not bytes.
 
+#![cfg(test)]
+
 use actool::catalog::AssetCatalog;
 use actool::print_contents::{TOP_KEY, catalog_contents, to_plist_xml};
 use std::path::PathBuf;

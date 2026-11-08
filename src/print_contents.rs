@@ -93,7 +93,7 @@ fn image_size(path: &Path) -> Result<(u32, u32)> {
         .to_ascii_lowercase();
     let whole = |v: f64| {
         let r = v.round();
-        (r.is_finite() && (1.0..=u32::MAX as f64).contains(&r)).then(|| r as u32)
+        (r.is_finite() && (1.0..=u32::MAX as f64).contains(&r)).then_some(r as u32)
     };
     match extension.as_str() {
         "png" => image::image_dimensions(path)
