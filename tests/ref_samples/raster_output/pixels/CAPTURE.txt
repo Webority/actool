@@ -1,0 +1,48 @@
+Captured 2026-11-09 on Xcode 26.5 (17F42), macOS host.
+Source: ../compiled/Assets.car, the catalog Xcode 26.5's actool wrote for tests/ref_samples/Raster.xcassets (../CAPTURE.txt).
+Method: CoreUI's CUICatalog imageWithName:scaleFactor:deviceIdiom: (idiom 1, iPhone), scales 1 to 3, each CGImage written by ImageIO as PNG.
+Every image came back as a _CUIInternalLinkRendition into ZZZZPackedAsset, so these are Xcode's stored bitmaps
+decoded by Apple's framework, not a fresh rasterisation of glyph.svg or vector.pdf.
+Images: 8 bits per component, premultiplied-last alpha in memory, stored by ImageIO as straight-alpha RGBA PNG.
+
+Exporter (build with xcrun clang -fobjc-arc -framework Foundation -framework CoreGraphics -framework ImageIO car_to_png.m -o car_to_png;
+run: ./car_to_png ../compiled/Assets.car . Glyph Vector):
+
+// Exports named images from a compiled Assets.car as loose PNGs through CoreUI, the framework UIKit and AppKit load catalogs with.
+#import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
+#import <ImageIO/ImageIO.h>
+#include <dlfcn.h>
+#import <objc/runtime.h>
+@interface NSObject (CoreUI)
+- (id)initWithURL:(NSURL *)url error:(NSError **)error;
+- (id)imageWithName:(NSString *)name scaleFactor:(double)scale deviceIdiom:(long long)idiom;
+- (CGImageRef)image;
+@end
+int main(int argc, const char **argv) {
+    @autoreleasepool {
+        if (argc < 4) { fprintf(stderr, "usage: %s <Assets.car> <out dir> <name>...\n", argv[0]); return 2; }
+        if (!dlopen("/System/Library/PrivateFrameworks/CoreUI.framework/CoreUI", RTLD_NOW)) { fprintf(stderr, "%s\n", dlerror()); return 1; }
+        NSError *error = nil;
+        id catalog = [[NSClassFromString(@"CUICatalog") alloc] initWithURL:[NSURL fileURLWithPath:@(argv[1])] error:&error];
+        if (!catalog) { fprintf(stderr, "opening the catalog: %s\n", error.description.UTF8String); return 1; }
+        NSString *out = @(argv[2]);
+        [NSFileManager.defaultManager createDirectoryAtPath:out withIntermediateDirectories:YES attributes:nil error:nil];
+        int status = 0;
+        for (int i = 3; i < argc; i++) {
+            for (int scale = 1; scale <= 3; scale++) {
+                // Idiom 1 is iPhone; a universal rendition answers every idiom.
+                id named = [catalog imageWithName:@(argv[i]) scaleFactor:scale deviceIdiom:1];
+                CGImageRef image = named ? [named image] : NULL;
+                if (!image) { fprintf(stderr, "%s @%dx: no image\n", argv[i], scale); status = 1; continue; }
+                NSString *path = [out stringByAppendingPathComponent:[NSString stringWithFormat:@"%s@%dx.png", argv[i], scale]];
+                CGImageDestinationRef dest = CGImageDestinationCreateWithURL((__bridge CFURLRef)[NSURL fileURLWithPath:path], CFSTR("public.png"), 1, NULL);
+                CGImageDestinationAddImage(dest, image, NULL);
+                if (!CGImageDestinationFinalize(dest)) { fprintf(stderr, "%s: write failed\n", path.UTF8String); status = 1; }
+                CFRelease(dest);
+                printf("%s %zux%zu bpc=%zu alpha=%d\n", path.lastPathComponent.UTF8String, CGImageGetWidth(image), CGImageGetHeight(image), CGImageGetBitsPerComponent(image), (int)CGImageGetAlphaInfo(image));
+            }
+        }
+        return status;
+    }
+}
