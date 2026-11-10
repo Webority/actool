@@ -32,7 +32,8 @@ fn dmp2_used_for_atlas_at_11_0() {
             dmp2_inline: false,
             is_opaque: true,
         },
-    );
+    )
+    .expect("compress");
     assert_eq!(&out[..4], b"MLEC");
     let ver = u32::from_le_bytes(out[4..8].try_into().unwrap());
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
@@ -57,7 +58,8 @@ fn lzfse_used_for_standalone_at_11_0() {
             dmp2_inline: false,
             is_opaque: false,
         },
-    );
+    )
+    .expect("compress");
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_ne!(comp, 11, "standalone images should not use DMP2");
 }
@@ -79,7 +81,8 @@ fn no_dmp2_at_10_15() {
             dmp2_inline: false,
             is_opaque: false,
         },
-    );
+    )
+    .expect("compress");
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_ne!(comp, 11, "DMP2 should not be used for target < 11.0");
 }
@@ -101,7 +104,8 @@ fn no_dmp2_at_10_11() {
             dmp2_inline: false,
             is_opaque: false,
         },
-    );
+    )
+    .expect("compress");
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_ne!(comp, 11);
 }
@@ -126,7 +130,8 @@ fn dmp2_for_ga8_atlas() {
             dmp2_inline: false,
             is_opaque: false,
         },
-    );
+    )
+    .expect("compress");
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_eq!(comp, 11, "GA8 atlas should use DMP2 at 11.0+");
 }
@@ -148,7 +153,8 @@ fn small_data_skips_dmp2() {
             dmp2_inline: false,
             is_opaque: false,
         },
-    );
+    )
+    .expect("compress");
     let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
     assert_ne!(comp, 11, "data <= 256 bytes should skip DMP2");
 }

@@ -3,7 +3,6 @@
 use crate::catalog::AssetCatalog;
 use anyhow::{Context, Result, anyhow};
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::path::Path;
 
 pub const TOP_KEY: &str = "com.apple.actool.catalog-contents";
@@ -109,7 +108,7 @@ fn image_size(path: &Path) -> Result<(u32, u32)> {
         "pdf" => {
             let bytes =
                 std::fs::read(path).with_context(|| format!("reading image {}", path.display()))?;
-            let media_box = bytes
+            let body = bytes
                 .windows(b"/MediaBox".len())
                 .position(|w| w == b"/MediaBox")
                 .and_then(|at| {
@@ -117,15 +116,19 @@ fn image_size(path: &Path) -> Result<(u32, u32)> {
                         .trim_ascii_start()
                         .strip_prefix(b"[")
                 })
-                .and_then(|rest| rest.iter().position(|&b| b == b']').map(|end| &rest[..end]))
-                .and_then(|body| std::str::from_utf8(body).ok())
-                .and_then(|text| {
-                    text.split_ascii_whitespace()
-                        .map(|s| s.parse::<f64>().ok())
-                        .collect::<Option<Vec<f64>>>()
-                });
-            match media_box.as_deref() {
-                Some(&[x0, y0, x1, y1]) => whole(x1 - x0)
+                .and_then(|rest| rest.iter().position(|&b| b == b']').map(|end| &rest[..end]));
+            let Some(body) = body else {
+                return Err(anyhow!("no /MediaBox [x0 y0 x1 y1] in {}", path.display()));
+            };
+            let text = std::str::from_utf8(body)
+                .with_context(|| format!("reading the /MediaBox of {}", path.display()))?;
+            let numbers = text
+                .split_ascii_whitespace()
+                .map(|s| s.parse::<f64>())
+                .collect::<std::result::Result<Vec<f64>, _>>()
+                .with_context(|| format!("reading the /MediaBox of {}", path.display()))?;
+            match numbers.as_slice() {
+                &[x0, y0, x1, y1] => whole(x1 - x0)
                     .zip(whole(y1 - y0))
                     .ok_or_else(|| anyhow!("empty /MediaBox in {}", path.display())),
                 _ => Err(anyhow!("no /MediaBox [x0 y0 x1 y1] in {}", path.display())),
@@ -158,7 +161,12 @@ fn image_size(path: &Path) -> Result<(u32, u32)> {
             let plain = |name: &str| {
                 attr(name).and_then(|v| {
                     let s = v.trim();
-                    s.strip_suffix("px").unwrap_or(s).trim().parse::<f64>().ok()
+                    // A unit such as `%` or `auto` is no pixel size: the viewBox answers, and
+                    // the error below names the file when neither does.
+                    match s.strip_suffix("px").unwrap_or(s).trim().parse::<f64>() {
+                        Ok(n) if n.is_finite() => Some(n),
+                        _ => None,
+                    }
                 })
             };
             let from_attrs = match (plain("width"), plain("height")) {
@@ -166,13 +174,18 @@ fn image_size(path: &Path) -> Result<(u32, u32)> {
                 _ => None,
             };
             let from_view_box = attr("viewBox").and_then(|v| {
-                let nums = v
+                // A malformed viewBox leaves no size; the error below reports it.
+                let nums = match v
                     .split(|c: char| c.is_ascii_whitespace() || c == ',')
                     .filter(|s| !s.is_empty())
-                    .map(|s| s.parse::<f64>().ok())
-                    .collect::<Option<Vec<f64>>>();
-                match nums.as_deref() {
-                    Some([.., w, h]) => whole(*w).zip(whole(*h)),
+                    .map(|s| s.parse::<f64>())
+                    .collect::<std::result::Result<Vec<f64>, _>>()
+                {
+                    Ok(nums) => nums,
+                    Err(_) => return None,
+                };
+                match nums.as_slice() {
+                    [.., w, h] => whole(*w).zip(whole(*h)),
                     _ => None,
                 }
             });
@@ -241,29 +254,38 @@ fn write_value(out: &mut String, value: &Value, depth: usize) {
     let indent = "\t".repeat(depth);
     match value {
         Value::Dict(map) => {
-            let _ = writeln!(out, "{indent}<dict>");
+            out.push_str(&indent);
+            out.push_str("<dict>\n");
             for (key, child) in map {
-                let _ = write!(out, "{indent}\t<key>");
+                out.push_str(&indent);
+                out.push_str("\t<key>");
                 push_escaped(out, key);
                 out.push_str("</key>\n");
                 write_value(out, child, depth + 1);
             }
-            let _ = writeln!(out, "{indent}</dict>");
+            out.push_str(&indent);
+            out.push_str("</dict>\n");
         }
         Value::Array(items) => {
-            let _ = writeln!(out, "{indent}<array>");
+            out.push_str(&indent);
+            out.push_str("<array>\n");
             for item in items {
                 write_value(out, item, depth + 1);
             }
-            let _ = writeln!(out, "{indent}</array>");
+            out.push_str(&indent);
+            out.push_str("</array>\n");
         }
         Value::String(text) => {
-            let _ = write!(out, "{indent}<string>");
+            out.push_str(&indent);
+            out.push_str("<string>");
             push_escaped(out, text);
             out.push_str("</string>\n");
         }
         Value::Real(number) => {
-            let _ = writeln!(out, "{indent}<real>{number}</real>");
+            out.push_str(&indent);
+            out.push_str("<real>");
+            out.push_str(&number.to_string());
+            out.push_str("</real>\n");
         }
     }
 }
@@ -303,13 +325,19 @@ fn write_human(out: &mut String, value: &Value, depth: usize) {
                 match (key.as_str(), field) {
                     ("filename" | "children", _) => {}
                     (_, Value::String(text)) => {
-                        let _ = write!(out, " {key}={text}");
+                        out.push(' ');
+                        out.push_str(key);
+                        out.push('=');
+                        out.push_str(text);
                     }
                     ("image", Value::Dict(size)) => {
                         if let (Some(Value::Real(w)), Some(Value::Real(h))) =
                             (size.get("width"), size.get("height"))
                         {
-                            let _ = write!(out, " image={w}x{h}");
+                            out.push_str(" image=");
+                            out.push_str(&w.to_string());
+                            out.push('x');
+                            out.push_str(&h.to_string());
                         }
                     }
                     _ => {}

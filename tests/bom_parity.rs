@@ -20,8 +20,8 @@ fn matches_frozen_snapshot() {
     let reference_path = "tests/parity_references/bom_reference.bin";
     let reference = std::fs::read(reference_path).expect("read reference");
     if ours != reference {
-        let _ = std::fs::create_dir_all("tmp");
-        let _ = std::fs::write("tmp/bom_rust_output.bin", &ours);
+        std::fs::create_dir_all("tmp").expect("create tmp dump dir");
+        std::fs::write("tmp/bom_rust_output.bin", &ours).expect("write BOM dump");
         let mut diffs = 0;
         for (i, (a, b)) in ours.iter().zip(reference.iter()).enumerate() {
             if a != b && diffs < 20 {

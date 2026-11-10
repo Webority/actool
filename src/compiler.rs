@@ -9,7 +9,7 @@ use crate::catalog::{APPEARANCE_TINTABLE, AssetCatalog, Facet, IconImage};
 use crate::cgbi;
 use crate::icns;
 use crate::packer::{self, PackedImage};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -99,8 +99,19 @@ pub fn compile_catalog_with_icons(
 
     let deploy_ver: (u32, u32) = {
         let mut parts = min_deploy.split('.');
-        let a: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-        let b: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+        let a: u32 = parts
+            .next()
+            .unwrap_or_default()
+            .parse::<u32>()
+            .with_context(|| {
+                format!("--minimum-deployment-target {min_deploy:?} is not a version")
+            })?;
+        let b: u32 = match parts.next() {
+            Some(minor) => minor.parse::<u32>().with_context(|| {
+                format!("--minimum-deployment-target {min_deploy:?} is not a version")
+            })?,
+            None => 0,
+        };
         (a, b)
     };
     let min_pack_ver = car::min_pack_version(platform);
@@ -245,7 +256,7 @@ pub fn compile_catalog_with_icons(
                     platform,
                 },
                 force_lzfse,
-            );
+            )?;
             all_entries.push((atlas_key, atlas_csi));
 
             for img in &atlas.images {
@@ -327,7 +338,7 @@ pub fn compile_catalog_with_icons(
     for i in inline_indices {
         let r = &renditions[i];
         let key = r.build_rendition_key();
-        let csi = r.build_csi();
+        let csi = r.build_csi()?;
         all_entries.push((key, csi));
     }
 
@@ -411,7 +422,9 @@ pub fn compile_catalog_with_icons(
         let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("jpg");
         let dest = output_dir.join(format!("{imageset_stem}.{ext}"));
         fs::copy(src, &dest)?;
-        output_files.push(dunce::canonicalize(&dest).unwrap_or(dest));
+        output_files.push(
+            dunce::canonicalize(&dest).with_context(|| format!("resolving {}", dest.display()))?,
+        );
     }
 
     if let Some(icon_name) = app_icon {
@@ -440,7 +453,10 @@ pub fn compile_catalog_with_icons(
                             std::io::Write::flush(&mut file)?;
                         }
                     }
-                    output_files.push(dunce::canonicalize(&dest).unwrap_or(dest));
+                    output_files.push(
+                        dunce::canonicalize(&dest)
+                            .with_context(|| format!("resolving {}", dest.display()))?,
+                    );
                 }
             }
         } else if standalone_icon_behavior != "none" {
@@ -448,13 +464,19 @@ pub fn compile_catalog_with_icons(
             if !icons.is_empty() {
                 let icns_path = output_dir.join(format!("{icon_name}.icns"));
                 icns::create_icns(&icons, &icns_path)?;
-                output_files.push(dunce::canonicalize(&icns_path).unwrap_or(icns_path));
+                output_files.push(
+                    dunce::canonicalize(&icns_path)
+                        .with_context(|| format!("resolving {}", icns_path.display()))?,
+                );
             }
         }
     }
 
     if produce_car {
-        output_files.push(dunce::canonicalize(&car_path).unwrap_or(car_path));
+        output_files.push(
+            dunce::canonicalize(&car_path)
+                .with_context(|| format!("resolving {}", car_path.display()))?,
+        );
     }
 
     if let Some(path) = info_plist_path {
@@ -481,7 +503,9 @@ pub fn compile_catalog_with_icons(
                 &locales,
             )?;
         }
-        output_files.push(dunce::canonicalize(path).unwrap_or(path.to_path_buf()));
+        output_files.push(
+            dunce::canonicalize(path).with_context(|| format!("resolving {}", path.display()))?,
+        );
     }
 
     Ok(output_files)

@@ -36,8 +36,8 @@ pub fn parse_svg_dimensions(svg: &[u8]) -> anyhow::Result<(u32, u32)> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("invalid built-in pattern: {e}"))?;
     if let (Some(w), Some(h)) = (w_re.captures(&text), h_re.captures(&text)) {
-        let wv: f64 = w[1].parse().unwrap_or(0.0);
-        let hv: f64 = h[1].parse().unwrap_or(0.0);
+        let wv = parse_dimension(&w[1], "width")?;
+        let hv = parse_dimension(&h[1], "height")?;
         return Ok((wv as u32, hv as u32));
     }
 
@@ -45,11 +45,18 @@ pub fn parse_svg_dimensions(svg: &[u8]) -> anyhow::Result<(u32, u32)> {
         .as_ref()
         .map_err(|e| anyhow::anyhow!("invalid built-in pattern: {e}"))?;
     if let Some(cap) = vb_re.captures(&text) {
-        let wv: f64 = cap[1].parse().unwrap_or(0.0);
-        let hv: f64 = cap[2].parse().unwrap_or(0.0);
+        let wv = parse_dimension(&cap[1], "viewBox width")?;
+        let hv = parse_dimension(&cap[2], "viewBox height")?;
         return Ok((wv as u32, hv as u32));
     }
     Ok((0, 0))
+}
+
+// `\d` matches Unicode digits that `f64::from_str` rejects, so a bad match is a
+// real input error, not a value to default to zero.
+fn parse_dimension(text: &str, attr: &str) -> anyhow::Result<f64> {
+    text.parse()
+        .map_err(|e| anyhow::anyhow!("SVG {attr} \"{text}\" is not a number: {e}"))
 }
 
 /// Whether SVG rasterization is available (always `true` off macOS, where the

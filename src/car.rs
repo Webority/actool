@@ -5,6 +5,7 @@
 //! the wrapping BOM structures are big-endian (handled in bom.rs).
 
 use crate::{deepmap2, name_hash};
+use anyhow::Context;
 use std::io::Write;
 
 // Keyformat tokens
@@ -116,17 +117,17 @@ pub fn colorspace_for_pixel_format(pixel_format: &[u8]) -> u32 {
     }
 }
 
-fn parse_version(s: &str) -> (u32, u32) {
+pub(crate) fn parse_version(s: &str) -> anyhow::Result<(u32, u32)> {
+    let bad =
+        |part: &str| anyhow::anyhow!("invalid deployment target `{s}`: `{part}` is not a number");
     let mut parts = s.split('.');
-    let a = parts
-        .next()
-        .and_then(|x| x.parse::<u32>().ok())
-        .unwrap_or(0);
-    let b = parts
-        .next()
-        .and_then(|x| x.parse::<u32>().ok())
-        .unwrap_or(0);
-    (a, b)
+    let a = parts.next().unwrap_or("");
+    let a = a.parse::<u32>().map_err(|_| bad(a))?;
+    let b = match parts.next() {
+        None => 0,
+        Some(part) => part.parse::<u32>().map_err(|_| bad(part))?,
+    };
+    Ok((a, b))
 }
 
 fn min_lzfse_version(platform: &str) -> (u32, u32) {
@@ -414,9 +415,14 @@ fn lzfse_compress(input: &[u8]) -> Option<Vec<u8>> {
     // is bounded by input size plus a small overhead.
     let cap = input.len() + 128;
     let mut out = vec![0u8; cap];
-    let n = lzfse::encode_buffer(input, &mut out).ok()?;
-    out.truncate(n);
-    Some(out)
+    match lzfse::encode_buffer(input, &mut out) {
+        Ok(n) => {
+            out.truncate(n);
+            Some(out)
+        }
+        // The worst-case buffer was too small: the input does not compress, so the caller stores it raw.
+        Err(lzfse::Error::CompressFailed | lzfse::Error::BufferTooSmall) => None,
+    }
 }
 
 fn compress_kcbc(pixel_data: &[u8], height: u32) -> Option<Vec<u8>> {
@@ -452,12 +458,12 @@ fn compress_kcbc(pixel_data: &[u8], height: u32) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn gzip_compress(data: &[u8]) -> Option<Vec<u8>> {
+fn gzip_compress(data: &[u8]) -> std::io::Result<Vec<u8>> {
     use flate2::Compression;
     use flate2::write::GzEncoder;
     let mut enc = GzEncoder::new(Vec::new(), Compression::default());
-    enc.write_all(data).ok()?;
-    enc.finish().ok()
+    enc.write_all(data)?;
+    enc.finish()
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -480,8 +486,13 @@ pub fn compress_data(
     height: u32,
     target: &DeployTarget,
     options: CompressOptions,
-) -> Vec<u8> {
-    let deploy_ver = parse_version(target.min_deploy);
+) -> anyhow::Result<Vec<u8>> {
+    let deploy_ver = parse_version(target.min_deploy).with_context(|| {
+        format!(
+            "--minimum-deployment-target {:?} is not a version",
+            target.min_deploy
+        )
+    })?;
 
     if options.allow_dmp2 {
         let dmp2_min = min_dmp2_version(target.platform);
@@ -490,12 +501,12 @@ pub fn compress_data(
             && let Some(dmp2_data) = deepmap2::encode(pixel_data, pixel_format, width, height)
         {
             let celm_ver = if options.is_opaque { 2 } else { 0 };
-            return deepmap2::make_celm_dmp2(
+            return Ok(deepmap2::make_celm_dmp2(
                 &dmp2_data,
                 pixel_format,
                 options.dmp2_inline,
                 celm_ver,
-            );
+            ));
         }
     }
 
@@ -512,20 +523,29 @@ pub fn compress_data(
         out.extend_from_slice(&u32::to_le_bytes(3));
         out.extend_from_slice(b"KCBC");
         out.extend_from_slice(&kcbc);
-        return out;
+        return Ok(out);
     }
 
     if pixel_data.len() >= 4096 {
-        if let Some(gz) = gzip_compress(pixel_data)
-            && gz.len() < pixel_data.len()
-        {
-            let mut out = Vec::new();
-            out.extend_from_slice(b"MLEC");
-            out.extend_from_slice(&u32::to_le_bytes(0));
-            out.extend_from_slice(&u32::to_le_bytes(2));
-            out.extend_from_slice(&u32::to_le_bytes(gz.len() as u32));
-            out.extend_from_slice(&gz);
-            return out;
+        match gzip_compress(pixel_data) {
+            Ok(gz) if gz.len() < pixel_data.len() => {
+                let mut out = Vec::new();
+                out.extend_from_slice(b"MLEC");
+                out.extend_from_slice(&u32::to_le_bytes(0));
+                out.extend_from_slice(&u32::to_le_bytes(2));
+                out.extend_from_slice(&u32::to_le_bytes(gz.len() as u32));
+                out.extend_from_slice(&gz);
+                return Ok(out);
+            }
+            Ok(_) => {}
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "gzip compression of a {}-byte rendition failed",
+                        pixel_data.len()
+                    )
+                });
+            }
         }
     } else if height > 0 {
         let bpp = if pixel_format == b"BGRA" { 4 } else { 2 };
@@ -537,10 +557,14 @@ pub fn compress_data(
             out.extend_from_slice(&u32::to_le_bytes(1));
             out.extend_from_slice(&u32::to_le_bytes(rle.len() as u32));
             out.extend_from_slice(&rle);
-            return out;
+            return Ok(out);
         }
     }
 
+    Ok(uncompressed_mlec(pixel_data))
+}
+
+fn uncompressed_mlec(pixel_data: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(b"MLEC");
     out.extend_from_slice(&u32::to_le_bytes(0));
@@ -770,7 +794,7 @@ pub fn build_packed_asset_csi(
     asset: &PackedAsset,
     target: &DeployTarget,
     force_lzfse: bool,
-) -> Vec<u8> {
+) -> anyhow::Result<Vec<u8>> {
     let PackedAsset {
         name,
         width,
@@ -797,7 +821,7 @@ pub fn build_packed_asset_csi(
             dmp2_inline: false,
             is_opaque: false,
         },
-    );
+    )?;
     let actual_comp = if rend_data.len() >= 12 {
         u32::from_le_bytes([rend_data[8], rend_data[9], rend_data[10], rend_data[11]])
     } else {
@@ -814,7 +838,7 @@ pub fn build_packed_asset_csi(
     tlv.extend_from_slice(&u32::to_le_bytes(bpr));
 
     let cs_id = colorspace_for_pixel_format(pixel_format);
-    build_csi(
+    Ok(build_csi(
         &CsiHeader {
             width,
             height,
@@ -828,7 +852,7 @@ pub fn build_packed_asset_csi(
         &tlv,
         &rend_data,
         1,
-    )
+    ))
 }
 
 /// Reference to a rendition embedded in iconstack / IconGroup TLVs.
@@ -1477,9 +1501,9 @@ impl Rendition {
         make_rendition_key(parts, &self.keyformat)
     }
 
-    pub fn build_csi(&self) -> Vec<u8> {
+    pub fn build_csi(&self) -> anyhow::Result<Vec<u8>> {
         if let Some(over) = &self.csi_override {
-            return over.clone();
+            return Ok(over.clone());
         }
         let scale_factor = self.scale as u32 * 100;
 
@@ -1493,7 +1517,12 @@ impl Rendition {
 
         let mut rend_data = Vec::new();
         if !self.pixel_data.is_empty() {
-            let deploy_ver = parse_version(&self.min_deploy);
+            let deploy_ver = parse_version(&self.min_deploy).with_context(|| {
+                format!(
+                    "--minimum-deployment-target {:?} is not a version",
+                    self.min_deploy
+                )
+            })?;
             let lzfse_min = min_lzfse_version(&self.platform);
             let use_aligned = deploy_ver >= lzfse_min;
             // Apple compresses xcassets BGRA *and* GA8 renditions with deepmap2
@@ -1559,7 +1588,7 @@ impl Rendition {
                     dmp2_inline: false,
                     is_opaque: opaque,
                 },
-            );
+            )?;
             let actual_comp = if rend_data.len() >= 12 {
                 u32::from_le_bytes([rend_data[8], rend_data[9], rend_data[10], rend_data[11]])
             } else {
@@ -1583,7 +1612,7 @@ impl Rendition {
             flags |= 0x04;
         }
 
-        build_csi(
+        Ok(build_csi(
             &CsiHeader {
                 width: self.width,
                 height: self.height,
@@ -1597,7 +1626,7 @@ impl Rendition {
             &tlv,
             &rend_data,
             if self.pixel_data.is_empty() { 0 } else { 1 },
-        )
+        ))
     }
 }
 
@@ -1762,7 +1791,8 @@ mod tests {
                 dmp2_inline: false,
                 is_opaque: false,
             },
-        );
+        )
+        .expect("compress");
         // 16 bytes of zeros shouldn't compress smaller than themselves
         assert_eq!(&out[..4], b"MLEC");
         let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
@@ -1785,7 +1815,8 @@ mod tests {
                 dmp2_inline: false,
                 is_opaque: false,
             },
-        );
+        )
+        .expect("compress");
         let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
         assert_eq!(comp, 4); // KCBC LZFSE
     }
@@ -1809,7 +1840,8 @@ mod tests {
                 dmp2_inline: false,
                 is_opaque: false,
             },
-        );
+        )
+        .expect("compress");
         let comp = u32::from_le_bytes(out[8..12].try_into().unwrap());
         assert_eq!(comp, 11);
     }

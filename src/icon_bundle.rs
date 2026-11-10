@@ -7,7 +7,7 @@ use crate::icon_json::{Fill, IconJson};
 use crate::name_hash::hash_name;
 
 static TMP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-use anyhow::Result;
+use anyhow::{Context, Result};
 use image::imageops::FilterType;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -140,6 +140,14 @@ pub fn compile_icon_bundle(
     accent_color: Option<&str>,
     standalone_icon_behavior: &str,
 ) -> Result<Vec<PathBuf>> {
+    if let Some(accent) = accent_color {
+        anyhow::bail!("--accent-color {accent:?} is not supported for .icon bundles");
+    }
+    if standalone_icon_behavior != "default" {
+        anyhow::bail!(
+            "--standalone-icon-behavior {standalone_icon_behavior:?} is not supported for .icon bundles; use default"
+        );
+    }
     fs::create_dir_all(output_dir)?;
     let bundle_stem = icon_path
         .file_stem()
@@ -202,8 +210,9 @@ pub fn compile_icon_bundle(
             })
             .collect()
     };
-    let (color_assets, gradient_assets) = fill_assets(&facet_prefix, parsed.fill.as_ref(), &parsed)
-        .unwrap_or_else(|| (Vec::new(), Vec::new()));
+    let (color_assets, gradient_assets) =
+        fill_assets(&facet_prefix, parsed.fill.as_ref(), &parsed)?
+            .unwrap_or_else(|| (Vec::new(), Vec::new()));
 
     let mut output_files: Vec<PathBuf> = Vec::new();
 
@@ -282,13 +291,13 @@ pub fn compile_icon_bundle(
     // between light and dark. The primary variant uses the light stack, the
     // alternate (when the variant axis is active) the dark stack.
     use crate::icon_effects::Appearance;
-    let light_layers = collect_stack_layers(icon_path, &parsed, Appearance::Light);
-    let dark_layers = collect_stack_layers(icon_path, &parsed, Appearance::Dark);
+    let light_layers = collect_stack_layers(icon_path, &parsed, Appearance::Light)?;
+    let dark_layers = collect_stack_layers(icon_path, &parsed, Appearance::Dark)?;
     // Frosted-glass layers multiply the background gradient, so the stack
     // renderer needs the same fill the compositor will draw under it. The
     // solid-fill case uses the flat solid colour for the light background.
     let (light_fill, dark_fill) =
-        resolve_background_fills(&parsed, &gradient_assets, &color_assets);
+        resolve_background_fills(&parsed, &gradient_assets, &color_assets)?;
     let mut light_stacks: Vec<Vec<u8>> = Vec::with_capacity(MACOS_ICON_SIZES.len());
     let mut dark_stacks: Vec<Vec<u8>> = Vec::with_capacity(MACOS_ICON_SIZES.len());
     for (point_size, scale) in MACOS_ICON_SIZES {
@@ -318,7 +327,10 @@ pub fn compile_icon_bundle(
         platform,
         min_deploy,
     )?;
-    output_files.push(dunce::canonicalize(&car_path).unwrap_or(car_path));
+    output_files.push(
+        dunce::canonicalize(&car_path)
+            .with_context(|| format!("resolving {}", car_path.display()))?,
+    );
 
     // Apple's empirical rule for `.icon` bundles: emit `<icon_name>.icns`
     // and a populated partial plist (CFBundleIconFile/CFBundleIconName)
@@ -330,13 +342,15 @@ pub fn compile_icon_bundle(
         let icns_path = output_dir.join(format!("{icon_name}.icns"));
         crate::icns::create_icns(&icon_images, &icns_path)?;
         if icns_path.exists() {
-            output_files.push(dunce::canonicalize(&icns_path).unwrap_or(icns_path));
+            output_files.push(
+                dunce::canonicalize(&icns_path)
+                    .with_context(|| format!("resolving {}", icns_path.display()))?,
+            );
         }
     }
 
-    let _ = fs::remove_dir_all(&tmpdir);
-    let _ = accent_color;
-    let _ = standalone_icon_behavior;
+    fs::remove_dir_all(&tmpdir)
+        .with_context(|| format!("removing scratch folder {}", tmpdir.display()))?;
 
     if let Some(path) = info_plist_path {
         if names_match {
@@ -344,7 +358,9 @@ pub fn compile_icon_bundle(
         } else {
             write_empty_partial_plist(path)?;
         }
-        output_files.push(dunce::canonicalize(path).unwrap_or(path.to_path_buf()));
+        output_files.push(
+            dunce::canonicalize(path).with_context(|| format!("resolving {}", path.display()))?,
+        );
     }
     Ok(output_files)
 }
@@ -594,7 +610,7 @@ fn collect_stack_layers(
     bundle: &Path,
     parsed: &IconJson,
     appearance: crate::icon_effects::Appearance,
-) -> Vec<StackLayer> {
+) -> Result<Vec<StackLayer>> {
     use crate::icon_effects::resolve_icon_effects;
     let mut out = Vec::new();
     for group in &parsed.groups {
@@ -664,7 +680,7 @@ fn collect_stack_layers(
             } else {
                 0.0
             };
-            let (native_w, native_h) = layer_native_size(&path);
+            let (native_w, native_h) = layer_native_size(&path)?;
             // Compose group∘layer, then map to canvas pixels by the base scale.
             out.push(StackLayer {
                 source: path,
@@ -685,7 +701,7 @@ fn collect_stack_layers(
     // icon.json lists groups/layers front-to-back (index 0 is the topmost);
     // painter's order needs them back-to-front, so reverse.
     out.reverse();
-    out
+    Ok(out)
 }
 
 /// Rasterize a layer source (SVG or raster) to `pixel_size`², straight RGBA.
@@ -724,19 +740,19 @@ fn rasterize_layer(path: &Path, w: u32, h: u32) -> Result<Vec<u8>> {
 
 /// The layer source's native point size (SVG viewBox / raster dimensions),
 /// used to render it at the right aspect inside the 1024-pt canvas.
-fn layer_native_size(path: &Path) -> (u32, u32) {
-    if is_svg_path(path) {
-        if let Ok(svg) = fs::read(path)
-            && let Ok((w, h)) = crate::svg_raster::parse_svg_dimensions(&svg)
-            && w > 0
-            && h > 0
-        {
-            return (w, h);
-        }
-        (1024, 1024)
+fn layer_native_size(path: &Path) -> Result<(u32, u32)> {
+    let (w, h) = if is_svg_path(path) {
+        let svg = fs::read(path).with_context(|| format!("reading layer {}", path.display()))?;
+        crate::svg_raster::parse_svg_dimensions(&svg)
+            .with_context(|| format!("reading the size of layer {}", path.display()))?
     } else {
-        image::image_dimensions(path).unwrap_or((1024, 1024))
+        image::image_dimensions(path)
+            .with_context(|| format!("reading the size of layer {}", path.display()))?
+    };
+    if w == 0 || h == 0 {
+        anyhow::bail!("layer {} has no width or height", path.display());
     }
+    Ok((w, h))
 }
 
 /// Separable layer blend modes (icon.json `blend-mode-specializations`). The
@@ -1294,7 +1310,7 @@ fn build_icon_car(
                     platform,
                 },
                 force_lzfse,
-            );
+            )?;
             renditions.push(Rendition {
                 name: atlas_name.clone(),
                 identifier: 0,
@@ -1657,7 +1673,7 @@ fn build_icon_car(
     let mut all_entries: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
     for rend in &renditions {
         let key = rend.build_rendition_key();
-        let csi = rend.build_csi();
+        let csi = rend.build_csi()?;
         all_entries.push((key, csi));
     }
     all_entries.sort_by(|a, b| a.0.cmp(&b.0));
@@ -1836,13 +1852,15 @@ fn flat_fill(rgb: [f64; 3]) -> crate::icon_render::GradientFill {
 /// The flat background colour for a `fill: {"solid": "<spec>"}` icon. Apple's
 /// light rendition paints this solid colour (not the dark `Gradient-1`, which
 /// is the dark-mode background), so it must drive the light composite directly.
-fn solid_fill_color(parsed: &IconJson) -> Option<[f64; 3]> {
+fn solid_fill_color(parsed: &IconJson) -> Result<Option<[f64; 3]>> {
     let Some(Fill::Structured(v)) = parsed.fill.as_ref() else {
-        return None;
+        return Ok(None);
     };
-    let spec = v.get("solid").and_then(|x| x.as_str())?;
+    let Some(spec) = v.get("solid").and_then(|x| x.as_str()) else {
+        return Ok(None);
+    };
     let (_cspace, comps) = parse_color_spec(spec)?;
-    comps_to_rgb(&comps)
+    Ok(comps_to_rgb(&comps))
 }
 
 /// Resolve the (light, dark) background fills the compositor draws under the
@@ -1853,15 +1871,15 @@ fn resolve_background_fills(
     parsed: &IconJson,
     gradient_assets: &[GradientAsset],
     color_assets: &[ColorAsset],
-) -> (
+) -> Result<(
     Option<crate::icon_render::GradientFill>,
     Option<crate::icon_render::GradientFill>,
-) {
-    if let Some(rgb) = solid_fill_color(parsed) {
+)> {
+    if let Some(rgb) = solid_fill_color(parsed)? {
         let dark = gradient_assets
             .first()
             .and_then(|g| resolve_gradient_fill(g, color_assets));
-        return (Some(flat_fill(rgb)), dark);
+        return Ok((Some(flat_fill(rgb)), dark));
     }
     let light = gradient_assets
         .first()
@@ -1869,7 +1887,7 @@ fn resolve_background_fills(
     let dark = gradient_assets
         .get(1)
         .and_then(|g| resolve_gradient_fill(g, color_assets));
-    (light, dark)
+    Ok((light, dark))
 }
 
 /// Apple's default palette for `fill: "automatic"`. Empirically observed in
@@ -1959,20 +1977,26 @@ fn json_has_dark_appearance(v: &serde_json::Value) -> bool {
 }
 
 /// A parsed Apple color-spec string like `srgb:0.97288,0.97288,0.97288,1.0`
-/// or `extended-gray:0.84536,1.0`. Returns (colorspace_id, components).
-fn parse_color_spec(spec: &str) -> Option<(u32, Vec<f64>)> {
-    let (name, rest) = spec.split_once(':')?;
+/// or `extended-gray:0.84536,1.0`. Returns (colorspace_id, components); a spec
+/// without a colorspace, with a non-numeric component or with an unknown
+/// colorspace is an error naming the spec.
+fn parse_color_spec(spec: &str) -> Result<(u32, Vec<f64>)> {
+    let (name, rest) = spec
+        .split_once(':')
+        .ok_or_else(|| anyhow::anyhow!("color spec {spec:?} has no colorspace before its ':'"))?;
     // Apple rounds color-spec literals to 3 decimal places before promoting
     // to f32 and storing as f64 — verified empirically: spec "0.97288"
     // becomes f32(0.973) = 0.9729999…, not f32(0.97288). Mirror that.
     let comps: Vec<f64> = rest
         .split(',')
-        .map(|s| {
-            let f: f64 = s.trim().parse().ok()?;
+        .map(|s| -> Result<f64> {
+            let f = s.trim().parse::<f64>().with_context(|| {
+                format!("color spec {spec:?} has the component {s:?}, which is not a number")
+            })?;
             let rounded = (f * 1000.0).round() / 1000.0;
-            Some(rounded as f32 as f64)
+            Ok(rounded as f32 as f64)
         })
-        .collect::<Option<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>()?;
     // Empirical colorspace ids from Apple's RLOC blobs:
     //   srgb:r,g,b,a              → cspace=1 (4 components)
     //   gray:gray,alpha           → cspace=2 (2 components)
@@ -1985,9 +2009,13 @@ fn parse_color_spec(spec: &str) -> Option<(u32, Vec<f64>)> {
         "display-p3" => 3,
         "extended-srgb" => 4,
         "extended-gray" => 6,
-        _ => return None,
+        _ => {
+            return Err(anyhow::anyhow!(
+                "color spec {spec:?} names the unknown colorspace {name:?}"
+            ));
+        }
     };
-    Some((cspace, comps))
+    Ok((cspace, comps))
 }
 
 /// Apple's palette for a `fill: {"solid": "<spec>"}` icon. Empirically
@@ -2000,7 +2028,7 @@ fn parse_color_spec(spec: &str) -> Option<(u32, Vec<f64>)> {
 fn solid_fill_assets(
     facet_prefix: &str,
     spec: &str,
-) -> Option<(Vec<ColorAsset>, Vec<GradientAsset>)> {
+) -> Result<(Vec<ColorAsset>, Vec<GradientAsset>)> {
     let (user_cspace, user_components) = parse_color_spec(spec)?;
     let n = |s: &str| format!("{facet_prefix}_Assets/{s}");
     let g = |v: f32| v as f64;
@@ -2032,7 +2060,7 @@ fn solid_fill_assets(
         stops: vec![(0.0, n("Color-3")), (1.0, n("Color-4"))],
         kind: 1,
     }];
-    Some((colors, gradients))
+    Ok((colors, gradients))
 }
 
 /// Apple's palette for `fill: {"linear-gradient": ["<stop0>", "<stop1>"]}` —
@@ -2043,9 +2071,9 @@ fn solid_fill_assets(
 fn linear_gradient_fill_assets(
     facet_prefix: &str,
     stops_spec: &[&str],
-) -> Option<(Vec<ColorAsset>, Vec<GradientAsset>)> {
+) -> Result<Option<(Vec<ColorAsset>, Vec<GradientAsset>)>> {
     if stops_spec.len() < 2 {
-        return None;
+        return Ok(None);
     }
     let (cs0, c0) = parse_color_spec(stops_spec[0])?;
     let (cs1, c1) = parse_color_spec(stops_spec[1])?;
@@ -2092,7 +2120,7 @@ fn linear_gradient_fill_assets(
             kind: 1,
         },
     ];
-    Some((colors, gradients))
+    Ok(Some((colors, gradients)))
 }
 
 /// Apple's palette for `fill: {"automatic-gradient": "<color spec>"}` —
@@ -2103,7 +2131,7 @@ fn linear_gradient_fill_assets(
 fn automatic_gradient_fill_assets(
     facet_prefix: &str,
     spec: &str,
-) -> Option<(Vec<ColorAsset>, Vec<GradientAsset>)> {
+) -> Result<(Vec<ColorAsset>, Vec<GradientAsset>)> {
     let (user_cspace, user_components) = parse_color_spec(spec)?;
     let n = |s: &str| format!("{facet_prefix}_Assets/{s}");
     let g = |v: f32| v as f64;
@@ -2143,7 +2171,7 @@ fn automatic_gradient_fill_assets(
             kind: 1,
         },
     ];
-    Some((colors, gradients))
+    Ok((colors, gradients))
 }
 
 /// Apple's palette for `fill: "system-dark"` — observed in KYA:
@@ -2297,7 +2325,7 @@ fn process_fill_value(
     colors: &mut Vec<ColorAsset>,
     gradients: &mut Vec<GradientAsset>,
     grad_floor: usize,
-) {
+) -> Result<()> {
     let g = |v: f64| (v as f32) as f64;
     if let Some(s) = value.as_str() {
         if let Some((top, bottom)) = keyword_bg_pair(s, appearance) {
@@ -2311,22 +2339,20 @@ fn process_fill_value(
                 vec![(0.0, c0), (1.0, c1)],
             );
         }
-        return;
+        return Ok(());
     }
     let Some(obj) = value.as_object() else {
-        return;
+        return Ok(());
     };
     if let Some(arr) = obj.get("linear-gradient").and_then(|x| x.as_array()) {
         let specs: Vec<&str> = arr.iter().filter_map(|x| x.as_str()).collect();
         if specs.len() < 2 {
-            return;
+            return Ok(());
         }
         let geometry = parse_orientation(obj);
         let mut names = Vec::with_capacity(specs.len());
         for spec in &specs {
-            let Some((cspace, comps)) = parse_color_spec(spec) else {
-                return;
-            };
+            let (cspace, comps) = parse_color_spec(spec)?;
             names.push(palette_add_color(
                 colors,
                 facet_prefix,
@@ -2345,10 +2371,10 @@ fn process_fill_value(
     } else if let Some(solid) = obj.get("solid").and_then(|x| x.as_str()) {
         // Solids deduplicate against the whole palette (recipe-scraper's layer
         // solid collapses onto its base gradient stop).
-        if let Some((cspace, comps)) = parse_color_spec(solid) {
-            palette_add_color(colors, facet_prefix, cspace, comps, 0);
-        }
+        let (cspace, comps) = parse_color_spec(solid)?;
+        palette_add_color(colors, facet_prefix, cspace, comps, 0);
     }
+    Ok(())
 }
 
 /// Apple's palette for a top-level `fill-specializations` block. The white
@@ -2360,7 +2386,7 @@ fn process_fill_value(
 fn fill_specializations_assets(
     facet_prefix: &str,
     json: &IconJson,
-) -> (Vec<ColorAsset>, Vec<GradientAsset>) {
+) -> Result<(Vec<ColorAsset>, Vec<GradientAsset>)> {
     let g = |v: f32| v as f64;
     let mut colors = vec![ColorAsset {
         facet_name: format!("{facet_prefix}_Assets/Color-1"),
@@ -2374,12 +2400,12 @@ fn fill_specializations_assets(
         for sp in specs {
             let appearance = sp.get("appearance").and_then(|a| a.as_str());
             if let Some(v) = sp.get("value") {
-                process_fill_value(v, appearance, facet_prefix, &mut colors, &mut gradients, 0);
+                process_fill_value(v, appearance, facet_prefix, &mut colors, &mut gradients, 0)?;
             }
         }
     }
-    append_layer_fills(facet_prefix, json, &mut colors, &mut gradients, 0);
-    (colors, gradients)
+    append_layer_fills(facet_prefix, json, &mut colors, &mut gradients, 0)?;
+    Ok((colors, gradients))
 }
 
 /// Fold every layer's `fill` and `fill-specializations` into the palette via
@@ -2394,30 +2420,32 @@ fn append_layer_fills(
     colors: &mut Vec<ColorAsset>,
     gradients: &mut Vec<GradientAsset>,
     grad_floor: usize,
-) {
+) -> Result<()> {
     for (_group, layer) in json.iter_layers() {
         if let Some(Fill::Structured(v)) = layer.fill.as_ref() {
-            process_fill_value(v, None, facet_prefix, colors, gradients, grad_floor);
+            process_fill_value(v, None, facet_prefix, colors, gradients, grad_floor)?;
         }
         if let Some(specs) = layer.fill_specializations.as_ref() {
             for sp in specs {
                 let appearance = sp.get("appearance").and_then(|a| a.as_str());
                 if let Some(v) = sp.get("value") {
-                    process_fill_value(v, appearance, facet_prefix, colors, gradients, grad_floor);
+                    process_fill_value(v, appearance, facet_prefix, colors, gradients, grad_floor)?;
                 }
             }
         }
     }
+    Ok(())
 }
 
 /// Try to derive Color/Gradient assets from an arbitrary fill spec.
 /// Returns None when the spec shape is unrecognized — caller falls back
-/// to no palette and the catalog stays self-consistent.
+/// to no palette and the catalog stays self-consistent. A malformed color
+/// spec inside a recognized shape is an error.
 fn fill_assets(
     facet_prefix: &str,
     fill: Option<&Fill>,
     parsed: &IconJson,
-) -> Option<(Vec<ColorAsset>, Vec<GradientAsset>)> {
+) -> Result<Option<(Vec<ColorAsset>, Vec<GradientAsset>)>> {
     // A top-level `fill-specializations` block drives its own appearance-keyed
     // palette, distinct from the single-`fill` shapes below.
     if parsed
@@ -2426,47 +2454,52 @@ fn fill_assets(
         .map(|v| !v.is_empty())
         .unwrap_or(false)
     {
-        return Some(fill_specializations_assets(facet_prefix, parsed));
+        return fill_specializations_assets(facet_prefix, parsed).map(Some);
     }
     if fill_is_automatic(fill) {
         let (mut colors, mut gradients) = automatic_fill_assets(facet_prefix);
         let base = colors.len();
-        append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
-        return Some((colors, gradients));
+        append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base)?;
+        return Ok(Some((colors, gradients)));
     }
-    let fill_val = fill?;
+    let Some(fill_val) = fill else {
+        return Ok(None);
+    };
     match fill_val {
         Fill::Keyword(k) if k == "system-dark" => {
             let (mut colors, mut gradients) = system_dark_fill_assets(facet_prefix);
             let base = colors.len();
-            append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
-            Some((colors, gradients))
+            append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base)?;
+            Ok(Some((colors, gradients)))
         }
         Fill::Structured(v) => {
             if let Some(spec) = v.get("solid").and_then(|s| s.as_str()) {
                 let (mut colors, mut gradients) = solid_fill_assets(facet_prefix, spec)?;
                 let base = colors.len();
-                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
-                return Some((colors, gradients));
+                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base)?;
+                return Ok(Some((colors, gradients)));
             }
             if let Some(spec) = v.get("automatic-gradient").and_then(|s| s.as_str()) {
                 let (mut colors, mut gradients) =
                     automatic_gradient_fill_assets(facet_prefix, spec)?;
                 let base = colors.len();
-                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
-                return Some((colors, gradients));
+                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base)?;
+                return Ok(Some((colors, gradients)));
             }
             if let Some(arr) = v.get("linear-gradient").and_then(|s| s.as_array()) {
                 let specs: Vec<&str> = arr.iter().filter_map(|x| x.as_str()).collect();
-                let (mut colors, mut gradients) =
-                    linear_gradient_fill_assets(facet_prefix, &specs)?;
+                let Some((mut colors, mut gradients)) =
+                    linear_gradient_fill_assets(facet_prefix, &specs)?
+                else {
+                    return Ok(None);
+                };
                 let base = colors.len();
-                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base);
-                return Some((colors, gradients));
+                append_layer_fills(facet_prefix, parsed, &mut colors, &mut gradients, base)?;
+                return Ok(Some((colors, gradients)));
             }
-            None
+            Ok(None)
         }
-        _ => None,
+        _ => Ok(None),
     }
 }
 
@@ -2691,7 +2724,7 @@ mod tests {
 
     fn palette(json: &str) -> (Vec<ColorAsset>, Vec<GradientAsset>) {
         let parsed = crate::icon_json::IconJson::parse(json).unwrap();
-        fill_specializations_assets("X", &parsed)
+        fill_specializations_assets("X", &parsed).expect("fill specializations palette")
     }
 
     fn write_solid_png(path: &Path, rgba: [u8; 4]) {

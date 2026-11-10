@@ -5,7 +5,7 @@
 use crate::car::{self, MultisizeImageEntry, Rendition};
 use crate::name_hash::hash_name;
 use crate::svg_raster;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use image::DynamicImage;
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -202,26 +202,32 @@ pub fn load_image_as_bgra(path: &Path, force_bgra: bool) -> Result<(Vec<u8>, u32
     }
 }
 
-fn parse_color_component(value: &str) -> f64 {
+fn parse_color_component(value: &str) -> Result<f64> {
     if value.starts_with("0x") || value.starts_with("0X") {
-        return i64::from_str_radix(&value[2..], 16).unwrap_or(0) as f64 / 255.0;
+        let v = i64::from_str_radix(&value[2..], 16)
+            .with_context(|| format!("color component `{value}` is not a hex number"))?;
+        return Ok(v as f64 / 255.0);
     }
     if value
         .chars()
         .all(|c| c.is_ascii_digit() || c == '+' || c == '-')
     {
-        let i: i64 = value.parse().unwrap_or(0);
+        let i: i64 = value
+            .parse()
+            .with_context(|| format!("color component `{value}` is not a number"))?;
         if !(0..=1).contains(&i) {
-            return i as f64 / 255.0;
+            return Ok(i as f64 / 255.0);
         }
-        return i as f64;
+        return Ok(i as f64);
     }
-    let f: f64 = value.parse().unwrap_or(0.0);
+    let f: f64 = value
+        .parse()
+        .with_context(|| format!("color component `{value}` is not a number"))?;
     if f > 1.0 {
-        return f / 255.0;
+        return Ok(f / 255.0);
     }
     // Cast through f32 to match Apple's single-precision parsing.
-    f as f32 as f64
+    Ok(f as f32 as f64)
 }
 
 fn colorspace_id_for_name(name: &str) -> u32 {
@@ -310,14 +316,6 @@ impl AssetCatalog {
         include_languages: Option<Vec<String>>,
         development_region: Option<String>,
     ) -> Self {
-        let deploy = {
-            let mut parts = min_deploy.split('.');
-            let a: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-            let b: u32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
-            (a, b)
-        };
-        let force_bgra = deploy < min_ga8_version(&platform);
-        let jpeg_in_car = deploy >= min_jpeg_car_version(&platform);
         Self {
             path,
             platform,
@@ -330,9 +328,10 @@ impl AssetCatalog {
             target_devices: Vec::new(),
             identifiers: IndexMap::new(),
             locales_used: HashSet::new(),
-            force_bgra,
+            // Set by `parse`, which validates the deployment target before any encoding.
+            force_bgra: false,
             loose_jpegs: Vec::new(),
-            jpeg_in_car,
+            jpeg_in_car: false,
         }
     }
 
@@ -423,6 +422,9 @@ impl AssetCatalog {
         if !self.path.exists() {
             return Err(anyhow!("Asset catalog not found: {}", self.path.display()));
         }
+        let deploy = car::parse_version(&self.min_deploy)?;
+        self.force_bgra = deploy < min_ga8_version(&self.platform);
+        self.jpeg_in_car = deploy >= min_jpeg_car_version(&self.platform);
         let mut renditions = Vec::new();
         let mut facets = IndexMap::new();
         let root = self.path.clone();
@@ -437,10 +439,7 @@ impl AssetCatalog {
         facets: &mut IndexMap<String, Facet>,
         namespace: &str,
     ) -> Result<()> {
-        let mut entries: Vec<PathBuf> = match fs::read_dir(dir) {
-            Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.path())).collect(),
-            Err(_) => return Ok(()),
-        };
+        let mut entries = read_entries(dir)?;
         entries.sort();
         for item in entries {
             let ext = item
@@ -459,19 +458,20 @@ impl AssetCatalog {
                 "" if item.is_dir() => {
                     let mut child_ns = namespace.to_string();
                     let group_json = item.join("Contents.json");
-                    if group_json.exists()
-                        && let Ok(v) = read_json(&group_json)
-                        && v.get("properties")
+                    if group_json.exists() {
+                        let v = read_json(&group_json)?;
+                        if v.get("properties")
                             .and_then(|p| p.get("provides-namespace"))
                             .and_then(|x| x.as_bool())
                             .unwrap_or(false)
-                    {
-                        let name = item.file_name().unwrap_or_default().to_string_lossy();
-                        child_ns = if namespace.is_empty() {
-                            format!("{name}/")
-                        } else {
-                            format!("{namespace}{name}/")
-                        };
+                        {
+                            let name = item.file_name().unwrap_or_default().to_string_lossy();
+                            child_ns = if namespace.is_empty() {
+                                format!("{name}/")
+                            } else {
+                                format!("{namespace}{name}/")
+                            };
+                        }
                     }
                     self.parse_directory(&item, renditions, facets, &child_ns)?;
                 }
@@ -525,7 +525,7 @@ impl AssetCatalog {
             if !img_path.exists() {
                 continue;
             }
-            let scale = parse_scale(img_info);
+            let scale = parse_scale(img_info, filename)?;
             let idiom = img_info
                 .get("idiom")
                 .and_then(|v| v.as_str())
@@ -623,7 +623,13 @@ impl AssetCatalog {
                 for &scale in vector_raster_scales(&self.platform) {
                     let raster = match crate::pdf_raster::rasterize_pdf(&pdf_data, scale) {
                         Ok(r) => r,
-                        Err(_) => continue,
+                        // Without CoreGraphics the warning was already printed once.
+                        Err(_) if !crate::pdf_raster::has_coregraphics_pdf() => continue,
+                        Err(e) => {
+                            return Err(
+                                e.context(format!("rasterizing {filename} at scale {scale}"))
+                            );
+                        }
                     };
                     // Template PDFs are grayscale icons. bgra_to_best_format
                     // downconverts to ` 8AG` (gray+alpha) when the pixels
@@ -860,14 +866,16 @@ impl AssetCatalog {
             let icon_rend_start = renditions.len();
 
             let lower_filename = filename.to_ascii_lowercase();
-            let scale = parse_scale(img_info);
+            let scale = parse_scale(img_info, filename)?;
             let size_str = img_info.get("size").and_then(|v| v.as_str()).unwrap_or("");
             // Floor handles fractional iPad sizes ("83.5x83.5" -> 83).
-            let point_w: u32 = size_str
-                .split_once('x')
-                .and_then(|(w, _)| w.parse::<f64>().ok())
-                .map(|f| f.floor() as u32)
-                .unwrap_or(0);
+            let point_w: u32 = match size_str.split_once('x') {
+                Some((w, _)) => w
+                    .parse::<f64>()
+                    .with_context(|| format!("{filename}: icon size `{size_str}` is not a number"))?
+                    .floor() as u32,
+                None => 0,
+            };
 
             if lower_filename.ends_with(".svg") {
                 let svg_data = fs::read(&img_path)?;
@@ -1065,10 +1073,7 @@ impl AssetCatalog {
         let ident = self.get_identifier(&facet_name);
         let re = regex::Regex::new(r"^icon_(\d+)x(\d+)(?:@(\d+)x)?\.png$")?;
         let mut icon_renditions: Vec<u32> = Vec::new();
-        let mut entries: Vec<PathBuf> = match fs::read_dir(item) {
-            Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.path())).collect(),
-            Err(_) => return Ok(()),
-        };
+        let mut entries = read_entries(item)?;
         entries.sort();
         for img_file in entries {
             if !img_file.is_file() {
@@ -1082,11 +1087,15 @@ impl AssetCatalog {
             let Some(cap) = re.captures(&fname) else {
                 continue;
             };
-            let point_w: u32 = cap[1].parse().unwrap_or(0);
-            let scale: u32 = cap
-                .get(3)
-                .map(|m| m.as_str().parse().unwrap_or(1))
-                .unwrap_or(1);
+            let point_w: u32 = cap[1]
+                .parse()
+                .with_context(|| format!("{fname}: icon width `{}` is not a number", &cap[1]))?;
+            let scale: u32 = match cap.get(3) {
+                Some(m) => m.as_str().parse().with_context(|| {
+                    format!("{fname}: icon scale `{}` is not a number", m.as_str())
+                })?,
+                None => 1,
+            };
             if self.platform == "macosx" && scale > 2 {
                 continue;
             }
@@ -1173,30 +1182,18 @@ impl AssetCatalog {
                 if components.is_null() {
                     continue;
                 }
-                let r = parse_color_component(
-                    components
-                        .get("red")
+                let component = |key: &str, default: &str| -> Result<f64> {
+                    let value = components
+                        .get(key)
                         .and_then(|v| v.as_str())
-                        .unwrap_or("0"),
-                );
-                let g = parse_color_component(
-                    components
-                        .get("green")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("0"),
-                );
-                let b = parse_color_component(
-                    components
-                        .get("blue")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("0"),
-                );
-                let a = parse_color_component(
-                    components
-                        .get("alpha")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("1"),
-                );
+                        .unwrap_or(default);
+                    parse_color_component(value)
+                        .with_context(|| format!("colorset {name}: {key} component"))
+                };
+                let r = component("red", "0")?;
+                let g = component("green", "0")?;
+                let b = component("blue", "0")?;
+                let a = component("alpha", "1")?;
                 let cs_name = color
                     .get("color-space")
                     .and_then(|v| v.as_str())
@@ -1314,10 +1311,7 @@ impl AssetCatalog {
                 identifier: atlas_ident,
             },
         );
-        let mut entries: Vec<PathBuf> = match fs::read_dir(item) {
-            Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.path())).collect(),
-            Err(_) => return Ok(()),
-        };
+        let mut entries = read_entries(item)?;
         entries.sort();
         for sprite_item in entries {
             if sprite_item.extension().and_then(|s| s.to_str()) != Some("imageset") {
@@ -1344,7 +1338,7 @@ impl AssetCatalog {
                     if !img_path.exists() {
                         continue;
                     }
-                    let scale = parse_scale(img_info);
+                    let scale = parse_scale(img_info, filename)?;
                     let (pd, w, h, pf) = load_image_as_bgra(&img_path, self.force_bgra)?;
                     renditions.push(Rendition {
                         name: filename.to_string(),
@@ -1428,7 +1422,7 @@ impl AssetCatalog {
                         if !p.exists() {
                             continue;
                         }
-                        let scale = parse_scale(img_info);
+                        let scale = parse_scale(img_info, filename)?;
                         let idiom = img_info
                             .get("idiom")
                             .and_then(|v| v.as_str())
@@ -1541,14 +1535,14 @@ impl AssetCatalog {
                     .unwrap_or("universal")
                     .to_string();
                 let size_str = img_info.get("size").and_then(|v| v.as_str()).unwrap_or("");
-                let point_w: u32 = size_str
-                    .split_once('x')
-                    .and_then(|(w, _)| w.parse().ok())
-                    .unwrap_or(0);
+                let point_w = match size_str.split_once('x') {
+                    Some((w, _)) => whole_point_width(w, filename)?,
+                    None => 0,
+                };
                 result.push(IconImage {
                     idiom,
                     point_w,
-                    scale: parse_scale(img_info),
+                    scale: parse_scale(img_info, filename)?,
                     path,
                     resample_px: None,
                 });
@@ -1584,12 +1578,12 @@ impl AssetCatalog {
                 if !p.exists() {
                     continue;
                 }
-                let scale = parse_scale(img_info);
+                let scale = parse_scale(img_info, filename)?;
                 let size_str = img_info.get("size").and_then(|v| v.as_str()).unwrap_or("");
                 let Some((w_part, _)) = size_str.split_once('x') else {
                     continue;
                 };
-                let point_w: u32 = w_part.parse().unwrap_or(0);
+                let point_w = whole_point_width(w_part, filename)?;
                 let pixel_size = point_w * scale;
                 result.push((p, pixel_size, scale));
             }
@@ -1642,12 +1636,34 @@ fn vector_raster_scales(platform: &str) -> &'static [u32] {
     }
 }
 
-fn parse_scale(img_info: &Value) -> u32 {
+fn parse_scale(img_info: &Value, asset: &str) -> Result<u32> {
     let s = img_info
         .get("scale")
         .and_then(|v| v.as_str())
         .unwrap_or("1x");
-    s.trim_end_matches('x').parse().unwrap_or(1)
+    s.trim_end_matches('x')
+        .parse::<u32>()
+        .with_context(|| format!("{asset}: scale `{s}` is not a whole number"))
+}
+
+/// A point width read as a whole number. A fractional width such as "83.5" reads as 0.
+fn whole_point_width(width: &str, asset: &str) -> Result<u32> {
+    match width.parse::<u32>() {
+        Ok(v) => Ok(v),
+        Err(_) if width.parse::<f64>().is_ok() => Ok(0),
+        Err(_) => Err(anyhow!("{asset}: icon width `{width}` is not a number")),
+    }
+}
+
+fn read_entries(dir: &Path) -> Result<Vec<PathBuf>> {
+    let listing = fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))?;
+    listing
+        .map(|entry| {
+            entry
+                .map(|e| e.path())
+                .with_context(|| format!("reading {}", dir.display()))
+        })
+        .collect()
 }
 
 /// The `ISAppearanceTintable` value Xcode 26.5's actool writes into the car's
@@ -1677,11 +1693,24 @@ fn read_json(path: &Path) -> Result<Value> {
 
 /// Names of every `.appiconset` under `dir`, recursing into folders as the parser does.
 fn collect_appiconsets(dir: &Path, out: &mut Vec<String>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            eprintln!(
+                "warning: cannot list {} for --include-all-app-icons: {e}",
+                dir.display()
+            );
+            return;
+        }
     };
-    for entry in entries.filter_map(|entry| entry.ok()) {
-        let path = entry.path();
+    for entry in entries {
+        let path = match entry {
+            Ok(entry) => entry.path(),
+            Err(e) => {
+                eprintln!("warning: cannot read an entry of {}: {e}", dir.display());
+                continue;
+            }
+        };
         if !path.is_dir() {
             continue;
         }
@@ -1701,21 +1730,25 @@ fn collect_appiconsets(dir: &Path, out: &mut Vec<String>) {
 mod tests {
     use super::*;
 
+    fn color(value: &str) -> f64 {
+        parse_color_component(value).expect("valid color component")
+    }
+
     #[test]
     fn parse_color_integer_normalised() {
-        assert!((parse_color_component("128") - 128.0 / 255.0).abs() < 1e-10);
-        assert_eq!(parse_color_component("0"), 0.0);
-        assert_eq!(parse_color_component("1"), 1.0);
+        assert!((color("128") - 128.0 / 255.0).abs() < 1e-10);
+        assert_eq!(color("0"), 0.0);
+        assert_eq!(color("1"), 1.0);
     }
 
     #[test]
     fn parse_color_hex() {
-        assert!((parse_color_component("0x80") - 128.0 / 255.0).abs() < 1e-10);
+        assert!((color("0x80") - 128.0 / 255.0).abs() < 1e-10);
     }
 
     #[test]
     fn parse_color_float_f32_roundtrip() {
-        let v = parse_color_component("0.5");
+        let v = color("0.5");
         let f: f64 = 0.5f32 as f64;
         assert_eq!(v, f);
     }

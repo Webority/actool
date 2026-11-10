@@ -1,8 +1,9 @@
 //! Objective-C / Swift asset symbol generation.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 fn platform_idioms(platform: &str) -> HashSet<&'static str> {
@@ -40,15 +41,11 @@ pub struct Asset {
     pub relative_path: String,
 }
 
-fn entry_applies(contents_path: &Path, platform: &str, keys: &[&str]) -> bool {
-    let content = match fs::read_to_string(contents_path) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-    let parsed: serde_json::Value = match serde_json::from_str(&content) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
+fn entry_applies(contents_path: &Path, platform: &str, keys: &[&str]) -> Result<bool> {
+    let content = fs::read_to_string(contents_path)
+        .with_context(|| format!("reading {}", contents_path.display()))?;
+    let parsed: serde_json::Value = serde_json::from_str(&content)
+        .with_context(|| format!("parsing {}", contents_path.display()))?;
     let allowed = platform_idioms(platform);
     for key in keys {
         if let Some(arr) = parsed.get(key).and_then(|v| v.as_array()) {
@@ -58,18 +55,18 @@ fn entry_applies(contents_path: &Path, platform: &str, keys: &[&str]) -> bool {
                     .and_then(|v| v.as_str())
                     .unwrap_or("universal");
                 if allowed.contains(idiom) {
-                    return true;
+                    return Ok(true);
                 }
             }
         }
     }
-    false
+    Ok(false)
 }
 
-pub fn walk_assets(xcassets_path: &Path, platform: &str) -> Vec<Asset> {
+pub fn walk_assets(xcassets_path: &Path, platform: &str) -> Result<Vec<Asset>> {
     let mut results = Vec::new();
-    walk_assets_inner(xcassets_path, platform, "", "", &mut results);
-    results
+    walk_assets_inner(xcassets_path, platform, "", "", &mut results)?;
+    Ok(results)
 }
 
 fn walk_assets_inner(
@@ -78,14 +75,15 @@ fn walk_assets_inner(
     rel_prefix: &str,
     namespace: &str,
     out: &mut Vec<Asset>,
-) {
+) -> Result<()> {
     if !root.is_dir() {
-        return;
+        return Ok(());
     }
-    let mut entries: Vec<PathBuf> = match fs::read_dir(root) {
-        Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.path())).collect(),
-        Err(_) => return,
-    };
+    let read_err = || format!("reading directory {}", root.display());
+    let mut entries: Vec<PathBuf> = fs::read_dir(root)
+        .with_context(read_err)?
+        .map(|e| e.map(|e| e.path()).with_context(read_err))
+        .collect::<Result<_>>()?;
     entries.sort();
     for item in entries {
         if !item.is_dir() {
@@ -112,7 +110,7 @@ fn walk_assets_inner(
         let suffix = item.extension().and_then(|s| s.to_str()).unwrap_or("");
         match suffix {
             "imageset" => {
-                if entry_applies(&contents, platform, &["images"]) {
+                if entry_applies(&contents, platform, &["images"])? {
                     out.push(Asset {
                         kind: AssetKind::Image,
                         leaf_name: name,
@@ -122,7 +120,7 @@ fn walk_assets_inner(
                 }
             }
             "colorset" => {
-                if entry_applies(&contents, platform, &["colors"]) {
+                if entry_applies(&contents, platform, &["colors"])? {
                     out.push(Asset {
                         kind: AssetKind::Color,
                         leaf_name: name,
@@ -133,23 +131,32 @@ fn walk_assets_inner(
             }
             "" => {
                 let mut child_ns = namespace.to_string();
-                if contents.exists()
-                    && let Ok(raw) = fs::read_to_string(&contents)
-                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw)
-                    && json
+                let raw = match fs::read_to_string(&contents) {
+                    Ok(raw) => Some(raw),
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+                    Err(e) => {
+                        return Err(e).with_context(|| format!("reading {}", contents.display()));
+                    }
+                };
+                if let Some(raw) = raw {
+                    let json = serde_json::from_str::<serde_json::Value>(&raw)
+                        .with_context(|| format!("{} is not valid JSON", contents.display()))?;
+                    if json
                         .get("properties")
                         .and_then(|p| p.get("provides-namespace"))
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false)
-                {
-                    child_ns = format!("{namespace}{name}/");
+                    {
+                        child_ns = format!("{namespace}{name}/");
+                    }
                 }
                 let child_rel = format!("{rel_prefix}{file_name}/");
-                walk_assets_inner(&item, platform, &child_rel, &child_ns, out);
+                walk_assets_inner(&item, platform, &child_rel, &child_ns, out)?;
             }
             _ => {}
         }
     }
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -326,7 +333,7 @@ pub fn generate_symbols_header(
     bundle_identifier: &str,
     platform: &str,
 ) -> Result<()> {
-    let assets = walk_assets(xcassets_path, platform);
+    let assets = walk_assets(xcassets_path, platform)?;
     let mut images: Vec<_> = assets
         .iter()
         .filter(|a| matches!(a.kind, AssetKind::Image))
@@ -393,9 +400,9 @@ pub fn generate_symbol_index(
     output_path: &Path,
     platform: &str,
 ) -> Result<()> {
-    let assets = walk_assets(xcassets_path, platform);
-    let catalog_abs =
-        dunce::canonicalize(xcassets_path).unwrap_or_else(|_| xcassets_path.to_path_buf());
+    let assets = walk_assets(xcassets_path, platform)?;
+    let catalog_abs = dunce::canonicalize(xcassets_path)
+        .with_context(|| format!("cannot resolve {}", xcassets_path.display()))?;
     let catalog_str = catalog_abs.to_string_lossy().into_owned();
 
     let mut colors: Vec<_> = assets

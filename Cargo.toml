@@ -1,5 +1,8 @@
 [workspace]
 
+[workspace.lints.rust]
+unused_must_use = "deny"
+
 [workspace.lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
@@ -7,6 +10,10 @@ undocumented_unsafe_blocks = "deny"
 dbg_macro = "deny"
 todo = "deny"
 allow_attributes_without_reason = "deny"
+let_underscore_must_use = "deny"
+let_underscore_future = "deny"
+unused_result_ok = "deny"
+disallowed_methods = "deny"
 
 [package]
 name = "actool"

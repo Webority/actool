@@ -9,7 +9,11 @@ use std::path::{Path, PathBuf};
 
 fn workspace_tmp(name: &str) -> PathBuf {
     let dir = PathBuf::from("tmp").join(name);
-    let _ = fs::remove_dir_all(&dir);
+    if let Err(e) = fs::remove_dir_all(&dir)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        panic!("clear {}: {e}", dir.display());
+    }
     fs::create_dir_all(&dir).unwrap();
     dir
 }

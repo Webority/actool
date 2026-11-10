@@ -2,4 +2,7 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 disallowed-methods = [
     { path = "std::fs::canonicalize", reason = "use dunce::canonicalize: std returns verbatim UNC paths on Windows that native tools refuse (rust.md)" },
+    { path = "core::result::Result::ok", reason = "fail-loud: Result::ok throws the error away; propagate with ? or match it. A genuine best-effort site matches the error and logs it: if let Err(e) = ... { log it } (rust.md Failing loud)" },
+    { path = "core::result::Result::unwrap_or", reason = "fail-loud: unwrap_or hides the error behind a default; propagate with ? or match it. A genuine best-effort site matches the error and logs it: if let Err(e) = ... { log it } (rust.md Failing loud)" },
+    { path = "core::result::Result::unwrap_or_default", reason = "fail-loud: unwrap_or_default hides the error behind a default; propagate with ? or match it. A genuine best-effort site matches the error and logs it: if let Err(e) = ... { log it } (rust.md Failing loud)" },
 ]

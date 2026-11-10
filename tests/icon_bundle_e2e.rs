@@ -466,7 +466,7 @@ fn solid_srgb_fill_emits_4_colors_1_gradient_with_user_color() {
             continue;
         }
         let name_end = 40 + val[40..168].iter().position(|&b| b == 0).unwrap_or(0);
-        let name = std::str::from_utf8(&val[40..name_end]).unwrap_or("");
+        let name = std::str::from_utf8(&val[40..name_end]).expect("layer name is UTF-8");
         if !name.ends_with("Color-2") {
             continue;
         }
@@ -515,7 +515,7 @@ fn solid_srgb_fill_emits_4_colors_1_gradient_with_user_color() {
             continue;
         }
         let name_end = 40 + val[40..168].iter().position(|&b| b == 0).unwrap_or(0);
-        let name = std::str::from_utf8(&val[40..name_end]).unwrap_or("");
+        let name = std::str::from_utf8(&val[40..name_end]).expect("layer name is UTF-8");
         if !name.ends_with("Color-2") {
             continue;
         }
@@ -577,7 +577,7 @@ fn svg_source_bundle_does_not_emit_legacy_pdf_only_catalog() {
             pdf_layout_count += 1;
         }
         let name_end = 40 + val[40..168].iter().position(|&b| b == 0).unwrap_or(0);
-        let name = std::str::from_utf8(&val[40..name_end]).unwrap_or("");
+        let name = std::str::from_utf8(&val[40..name_end]).expect("layer name is UTF-8");
         if name == "image.svg" {
             svg_layer_rendition_count += 1;
         }
