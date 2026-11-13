@@ -142,20 +142,23 @@ fn reference_shapes(info: &Path) -> anyhow::Result<Vec<Shape>> {
 fn vector_sets_compile_to_xcode_renditions() {
     let reference = Path::new("tests/ref_samples/raster_output");
     let out = tempfile::TempDir::new().expect("tempdir");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         Path::new("tests/ref_samples/Raster.xcassets"),
         out.path(),
-        "iphoneos",
-        "15.1",
-        None,
-        Some(&out.path().join("partial.plist")),
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "iphoneos",
+            min_deploy: "15.1",
+            app_icon: None,
+            info_plist_path: Some(&out.path().join("partial.plist")),
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
 

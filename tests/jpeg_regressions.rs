@@ -71,20 +71,23 @@ fn jpeg_stored_in_car_at_11_0() {
     let tmp = workspace_tmp("jpeg_11_0");
     let catalog = make_jpeg_catalog(&tmp);
     let out = tmp.join("out");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         &catalog,
         &out,
-        "macosx",
-        "11.0",
-        None,
-        None,
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "11.0",
+            app_icon: None,
+            info_plist_path: None,
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     let car = out.join("Assets.car");
@@ -100,20 +103,23 @@ fn jpeg_as_loose_file_at_10_9() {
     let tmp = workspace_tmp("jpeg_10_9");
     let catalog = make_jpeg_catalog(&tmp);
     let out = tmp.join("out");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         &catalog,
         &out,
-        "macosx",
-        "10.9",
-        None,
-        None,
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "10.9",
+            app_icon: None,
+            info_plist_path: None,
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     assert!(out.join("Photo.jpg").exists(), "loose Photo.jpg missing");

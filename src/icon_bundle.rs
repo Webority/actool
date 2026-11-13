@@ -129,17 +129,28 @@ pub fn is_icon_bundle(path: &Path) -> bool {
     path.extension().and_then(|s| s.to_str()) == Some("icon")
 }
 
-#[expect(clippy::too_many_arguments, reason = "EX-1")]
+/// The arguments `compile_icon_bundle` takes beyond the two paths and the platform pair.
+#[derive(Debug, Clone, Copy)]
+pub struct IconBundleOptions<'a> {
+    pub app_icon: Option<&'a str>,
+    pub info_plist_path: Option<&'a Path>,
+    pub accent_color: Option<&'a str>,
+    pub standalone_icon_behavior: &'a str,
+}
+
 pub fn compile_icon_bundle(
     icon_path: &Path,
     output_dir: &Path,
     platform: &str,
     min_deploy: &str,
-    app_icon: Option<&str>,
-    info_plist_path: Option<&Path>,
-    accent_color: Option<&str>,
-    standalone_icon_behavior: &str,
+    options: &IconBundleOptions<'_>,
 ) -> Result<Vec<PathBuf>> {
+    let &IconBundleOptions {
+        app_icon,
+        info_plist_path,
+        accent_color,
+        standalone_icon_behavior,
+    } = options;
     if let Some(accent) = accent_color {
         anyhow::bail!("--accent-color {accent:?} is not supported for .icon bundles");
     }
@@ -314,16 +325,20 @@ pub fn compile_icon_bundle(
         &car_path,
         &facet_prefix,
         &icon_images,
-        &layer_assets,
-        &group_facet_names,
-        &color_assets,
-        &gradient_assets,
-        &parsed.groups,
-        &light_stacks,
-        &dark_stacks,
-        light_fill.as_ref(),
-        dark_fill.as_ref(),
-        emit_variant_axis,
+        &CarAssets {
+            layer_assets: &layer_assets,
+            group_facet_names: &group_facet_names,
+            color_assets: &color_assets,
+            gradient_assets: &gradient_assets,
+            groups: &parsed.groups,
+        },
+        &CarShading {
+            light_stacks: &light_stacks,
+            dark_stacks: &dark_stacks,
+            light_fill: light_fill.as_ref(),
+            dark_fill: dark_fill.as_ref(),
+            emit_variant_axis,
+        },
         platform,
         min_deploy,
     )?;
@@ -1109,24 +1124,47 @@ fn find_all_source_images(bundle: &Path, json: &serde_json::Value) -> Vec<PathBu
     out
 }
 
-#[expect(clippy::too_many_arguments, reason = "EX-1")]
+/// The catalog side of `build_icon_car`: the layer, colour and gradient assets the car lists.
+struct CarAssets<'a> {
+    layer_assets: &'a [LayerAsset],
+    group_facet_names: &'a [String],
+    color_assets: &'a [ColorAsset],
+    gradient_assets: &'a [GradientAsset],
+    groups: &'a [crate::icon_json::Group],
+}
+
+/// The shading side of `build_icon_car`: the rendered layer stacks per appearance and their fills.
+struct CarShading<'a> {
+    light_stacks: &'a [Vec<u8>],
+    dark_stacks: &'a [Vec<u8>],
+    light_fill: Option<&'a crate::icon_render::GradientFill>,
+    dark_fill: Option<&'a crate::icon_render::GradientFill>,
+    emit_variant_axis: bool,
+}
+
 fn build_icon_car(
     car_path: &Path,
     icon_name: &str,
     icon_images: &[(PathBuf, u32, u32)],
-    layer_assets: &[LayerAsset],
-    group_facet_names: &[String],
-    color_assets: &[ColorAsset],
-    gradient_assets: &[GradientAsset],
-    groups: &[crate::icon_json::Group],
-    light_stacks: &[Vec<u8>],
-    dark_stacks: &[Vec<u8>],
-    light_fill: Option<&crate::icon_render::GradientFill>,
-    dark_fill: Option<&crate::icon_render::GradientFill>,
-    emit_variant_axis: bool,
+    assets: &CarAssets<'_>,
+    shading: &CarShading<'_>,
     platform: &str,
     min_deploy: &str,
 ) -> Result<()> {
+    let CarAssets {
+        layer_assets,
+        group_facet_names,
+        color_assets,
+        gradient_assets,
+        groups,
+    } = *assets;
+    let CarShading {
+        light_stacks,
+        dark_stacks,
+        light_fill,
+        dark_fill,
+        emit_variant_axis,
+    } = *shading;
     let ident = hash_name(icon_name);
     // The actual keyformat is computed from the renditions below — only the
     // attributes they exercise survive. .icon catalogs typically end up with

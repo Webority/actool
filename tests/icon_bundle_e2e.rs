@@ -234,10 +234,12 @@ fn compile(bundle: &Path, app_icon: &str, out: &Path) -> Vec<PathBuf> {
         out,
         "macosx",
         "26.0",
-        Some(app_icon),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some(app_icon),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     )
     .expect("compile_icon_bundle")
 }

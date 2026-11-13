@@ -32,20 +32,23 @@ fn compile_reference_catalog_produces_outputs() {
     }
     let out = workspace_tmp("rust_e2e_full");
     let plist = out.join("AppIcon.Info.plist");
-    let files = compiler::compile_catalog(
+    let files = compiler::compile_catalog_with_icons(
         &ref_catalog(),
         &out,
-        "macosx",
-        "11.0",
-        Some("AppIcon"),
-        Some(&plist),
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "11.0",
+            app_icon: Some("AppIcon"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     assert!(files.iter().any(|p| p.ends_with("Assets.car")));
@@ -65,20 +68,23 @@ fn compile_reference_catalog_without_icon() {
         return;
     }
     let out = workspace_tmp("rust_e2e_no_icon");
-    let files = compiler::compile_catalog(
+    let files = compiler::compile_catalog_with_icons(
         &ref_catalog(),
         &out,
-        "macosx",
-        "11.0",
-        None,
-        None,
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "11.0",
+            app_icon: None,
+            info_plist_path: None,
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     assert!(files.iter().any(|p| p.ends_with("Assets.car")));

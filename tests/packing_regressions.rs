@@ -98,20 +98,23 @@ fn lone_ga8_stored_inline() {
     )
     .expect("make catalog");
     let out = tmp.join("out");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         &catalog,
         &out,
-        "macosx",
-        "11.0",
-        None,
-        None,
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "11.0",
+            app_icon: None,
+            info_plist_path: None,
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));
@@ -125,20 +128,23 @@ fn single_imageset_stored_inline() {
     let tmp = workspace_tmp("packing_single");
     let catalog = make_catalog(&tmp, &[("Solo", "RGBA")]).expect("make");
     let out = tmp.join("out");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         &catalog,
         &out,
-        "macosx",
-        "11.0",
-        None,
-        None,
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "11.0",
+            app_icon: None,
+            info_plist_path: None,
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));
@@ -152,20 +158,23 @@ fn all_same_format_packed() {
     let tmp = workspace_tmp("packing_same_format");
     let catalog = make_catalog(&tmp, &[("X", "LA"), ("Y", "LA"), ("Z", "LA")]).expect("make");
     let out = tmp.join("out");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         &catalog,
         &out,
-        "macosx",
-        "11.0",
-        None,
-        None,
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "11.0",
+            app_icon: None,
+            info_plist_path: None,
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));
@@ -183,20 +192,23 @@ fn two_formats_one_each_both_inline() {
     let tmp = workspace_tmp("packing_one_each");
     let catalog = make_catalog(&tmp, &[("Color", "RGBA"), ("Gray", "LA")]).expect("make");
     let out = tmp.join("out");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         &catalog,
         &out,
-        "macosx",
-        "11.0",
-        None,
-        None,
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "macosx",
+            min_deploy: "11.0",
+            app_icon: None,
+            info_plist_path: None,
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
     let layouts = parse_car_layouts(&out.join("Assets.car"));

@@ -46,10 +46,12 @@ fn compile_ok(stem: &str, icon_json: &str) -> Vec<PathBuf> {
         &out,
         "macosx",
         "26.0",
-        Some(stem),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some(stem),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     )
     .expect("compile should succeed")
 }
@@ -62,10 +64,12 @@ fn compile_err(stem: &str, icon_json: &str) -> String {
         &out,
         "macosx",
         "26.0",
-        Some(stem),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some(stem),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     );
     match res {
         Ok(files) => panic!("expected Err, got Ok({files:?})"),
@@ -190,10 +194,12 @@ fn grayscale_source_with_variant_axis_compiles() {
         &out,
         "macosx",
         "26.0",
-        Some("Gray"),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some("Gray"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     )
     .expect("grayscale + variant-axis bundle should compile, not panic");
     assert_three_file_output(&files, "Gray");
@@ -239,10 +245,12 @@ fn missing_icon_json_returns_clean_error() {
         &out,
         "macosx",
         "26.0",
-        Some("NoJson"),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some("NoJson"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     );
     let msg = res.expect_err("must err").to_string();
     assert!(
@@ -264,10 +272,12 @@ fn bundle_is_file_returns_clean_error() {
         &out,
         "macosx",
         "26.0",
-        Some("FileBundle"),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some("FileBundle"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     );
     assert!(res.is_err(), "bundle that is a file must error");
 }
@@ -294,10 +304,12 @@ fn empty_groups_array_succeeds_with_no_outputs() {
         &out,
         "macosx",
         "26.0",
-        Some("EmptyGroups"),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some("EmptyGroups"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     )
     .expect("empty groups array must not error");
     assert!(files.is_empty(), "no source images → no outputs");
@@ -347,10 +359,12 @@ fn malformed_json_returns_clean_error() {
         &out,
         "macosx",
         "26.0",
-        Some("Mal"),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some("Mal"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     );
     assert!(res.is_err(), "malformed JSON must error");
 }
@@ -385,10 +399,12 @@ fn zero_byte_image_returns_clean_error() {
         &out,
         "macosx",
         "26.0",
-        Some("Z"),
-        Some(&plist),
-        None,
-        "default",
+        &icon_bundle::IconBundleOptions {
+            app_icon: Some("Z"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            standalone_icon_behavior: "default",
+        },
     );
     assert!(res.is_err(), "zero-byte PNG must error");
 }

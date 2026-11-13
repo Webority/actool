@@ -61,20 +61,23 @@ fn build_mixed_catalog(root: &Path) {
 
 fn compile_ios(xcassets: &Path, out: &Path) {
     let plist = out.join("partial.plist");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         xcassets,
         out,
-        "iphoneos",
-        "14.0",
-        None,
-        Some(&plist),
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "iphoneos",
+            min_deploy: "14.0",
+            app_icon: None,
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
 }
@@ -107,20 +110,23 @@ fn build_appicon_catalog(root: &Path, entries: &[(&str, &str, &str)]) {
 
 fn compile_ios_icon(xcassets: &Path, out: &Path) {
     let plist = out.join("partial.plist");
-    compiler::compile_catalog(
+    compiler::compile_catalog_with_icons(
         xcassets,
         out,
-        "iphoneos",
-        "14.0",
-        Some("AppIcon"),
-        Some(&plist),
-        None,
-        None,
-        "default",
-        None,
-        None,
-        true,
-        &[],
+        &compiler::CatalogOptions {
+            platform: "iphoneos",
+            min_deploy: "14.0",
+            app_icon: Some("AppIcon"),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: None,
+            plist_localizations: true,
+            target_devices: &[],
+            ..Default::default()
+        },
     )
     .expect("compile");
 }
@@ -574,19 +580,21 @@ fn ios_single_size_appicon_matches_actool() {
         compiler::compile_catalog_with_icons(
             Path::new("tests/ref_samples/IosSingleIcon.xcassets"),
             &out,
-            platform,
-            target,
-            Some("AppIcon"),
-            &compiler::IconSelection::default(),
-            Some(&plist),
-            None,
-            None,
-            "default",
-            None,
-            None,
-            true,
-            platform == "iphoneos",
-            &[],
+            &compiler::CatalogOptions {
+                platform,
+                min_deploy: target,
+                app_icon: Some("AppIcon"),
+                icons: compiler::IconSelection::default(),
+                info_plist_path: Some(&plist),
+                accent_color: None,
+                widget_background_color: None,
+                standalone_icon_behavior: "default",
+                include_languages: None,
+                development_region: None,
+                plist_localizations: true,
+                compress_pngs: platform == "iphoneos",
+                target_devices: &[],
+            },
         )
         .expect("compile");
 
@@ -848,19 +856,21 @@ fn variant_icon_case_matches(case: &str, platform: &str, target: &str) -> anyhow
     compiler::compile_catalog_with_icons(
         Path::new("tests/ref_samples/IosVariantIcon.xcassets"),
         &out,
-        platform,
-        target,
-        Some("AppIcon"),
-        &compiler::IconSelection::default(),
-        Some(&plist),
-        None,
-        None,
-        "default",
-        None,
-        Some("en".to_string()),
-        true,
-        platform == "iphoneos",
-        &["iphone".to_string(), "ipad".to_string()],
+        &compiler::CatalogOptions {
+            platform,
+            min_deploy: target,
+            app_icon: Some("AppIcon"),
+            icons: compiler::IconSelection::default(),
+            info_plist_path: Some(&plist),
+            accent_color: None,
+            widget_background_color: None,
+            standalone_icon_behavior: "default",
+            include_languages: None,
+            development_region: Some("en".to_string()),
+            plist_localizations: true,
+            compress_pngs: platform == "iphoneos",
+            target_devices: &["iphone".to_string(), "ipad".to_string()],
+        },
     )?;
 
     let want = Car::open(&reference.join("compiled/Assets.car"))?;

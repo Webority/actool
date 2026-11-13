@@ -23,62 +23,48 @@ pub struct IconSelection {
     pub include_all_app_icons: bool,
 }
 
-#[expect(clippy::too_many_arguments, reason = "EX-1")]
-pub fn compile_catalog(
+/// The arguments `compile_catalog_with_icons` takes beyond the two paths. A caller sets the
+/// fields it needs and takes the rest from `Default::default()`.
+#[derive(Debug, Clone, Default)]
+pub struct CatalogOptions<'a> {
+    pub platform: &'a str,
+    pub min_deploy: &'a str,
+    pub app_icon: Option<&'a str>,
+    pub icons: IconSelection,
+    pub info_plist_path: Option<&'a Path>,
+    pub accent_color: Option<&'a str>,
+    pub widget_background_color: Option<&'a str>,
+    pub standalone_icon_behavior: &'a str,
+    pub include_languages: Option<Vec<String>>,
+    pub development_region: Option<String>,
+    pub plist_localizations: bool,
+    pub compress_pngs: bool,
+    pub target_devices: &'a [String],
+}
+
+/// Compiles an xcassets catalog. Every selected `.appiconset` lands in the car, each gets its
+/// loose home-screen PNGs, and the iOS partial Info.plist lists the alternates under
+/// `CFBundleAlternateIcons` beside the primary, as Apple's actool writes them.
+pub fn compile_catalog_with_icons(
     xcassets_path: &Path,
     output_dir: &Path,
-    platform: &str,
-    min_deploy: &str,
-    app_icon: Option<&str>,
-    info_plist_path: Option<&Path>,
-    accent_color: Option<&str>,
-    widget_background_color: Option<&str>,
-    standalone_icon_behavior: &str,
-    include_languages: Option<Vec<String>>,
-    development_region: Option<String>,
-    plist_localizations: bool,
-    target_devices: &[String],
+    options: &CatalogOptions<'_>,
 ) -> Result<Vec<PathBuf>> {
-    compile_catalog_with_icons(
-        xcassets_path,
-        output_dir,
+    let &CatalogOptions {
         platform,
         min_deploy,
         app_icon,
-        &IconSelection::default(),
+        ref icons,
         info_plist_path,
         accent_color,
         widget_background_color,
         standalone_icon_behavior,
-        include_languages,
-        development_region,
+        ref include_languages,
+        ref development_region,
         plist_localizations,
-        false,
+        compress_pngs,
         target_devices,
-    )
-}
-
-/// `compile_catalog` with alternate icon sets: every selected `.appiconset` lands in the car,
-/// each gets its loose home-screen PNGs, and the iOS partial Info.plist lists the alternates
-/// under `CFBundleAlternateIcons` beside the primary, as Apple's actool writes them.
-#[expect(clippy::too_many_arguments, reason = "EX-1")]
-pub fn compile_catalog_with_icons(
-    xcassets_path: &Path,
-    output_dir: &Path,
-    platform: &str,
-    min_deploy: &str,
-    app_icon: Option<&str>,
-    icons: &IconSelection,
-    info_plist_path: Option<&Path>,
-    accent_color: Option<&str>,
-    widget_background_color: Option<&str>,
-    standalone_icon_behavior: &str,
-    include_languages: Option<Vec<String>>,
-    development_region: Option<String>,
-    plist_localizations: bool,
-    compress_pngs: bool,
-    target_devices: &[String],
-) -> Result<Vec<PathBuf>> {
+    } = options;
     fs::create_dir_all(output_dir)?;
     let has_icon = app_icon.is_some();
 
@@ -87,8 +73,8 @@ pub fn compile_catalog_with_icons(
         platform.to_string(),
         min_deploy.to_string(),
         app_icon.map(|s| s.to_string()),
-        include_languages,
-        development_region,
+        include_languages.clone(),
+        development_region.clone(),
     )
     .with_icon_selection(
         icons.alternate_app_icons.clone(),
