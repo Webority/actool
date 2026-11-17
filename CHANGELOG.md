@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.2.4-webority.7] - 17-Nov-2026
+
+### Fixed
+
+- A tree past one leaf (more than 510 renditions, or more than 126 bitmap keys) gets the root node Apple's `assetutil` reads; the old root crashed it, and App Store processing hung on every upload carrying such a catalog. A tree too large for one root is now an error instead of a malformed file.
+- SVG vector renditions are keyed at scale 0, as Xcode's actool keys them, so they no longer collide with the 1x raster.
+- App icon sets drop Apple Watch and Mac sizes when compiling for iOS, as Xcode does.
+
 ## [2.2.4-webority.6] - 08-Nov-2026
 
 ### Added
