@@ -845,6 +845,13 @@ impl AssetCatalog {
             if !image_platform_applies(img_platform, &self.platform) {
                 continue;
             }
+            let declared_idiom = img_info
+                .get("idiom")
+                .and_then(|v| v.as_str())
+                .unwrap_or("universal");
+            if !app_icon_idiom_applies(declared_idiom, &self.platform) {
+                continue;
+            }
 
             // App-icon renditions carry their device idiom on iOS (phone=1,
             // pad=2, marketing=6) so per-device icon lookups resolve. macOS
@@ -1511,6 +1518,15 @@ impl AssetCatalog {
                 ) {
                     continue;
                 }
+                if !app_icon_idiom_applies(
+                    img_info
+                        .get("idiom")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("universal"),
+                    &self.platform,
+                ) {
+                    continue;
+                }
                 // Apple's loose home-screen PNGs come from the any-appearance image only.
                 if appearance_from_json(img_info) != 0 {
                     continue;
@@ -1604,6 +1620,25 @@ fn image_platform_applies(image_platform: &str, sdk: &str) -> bool {
         "" => true,
         "ios" => car::is_idiom_platform(sdk),
         other => other == sdk,
+    }
+}
+
+/// Whether an app icon image's `idiom` belongs to the SDK being compiled for.
+/// Generated icon sets list Watch and Mac sizes beside the iOS ones;
+/// `/usr/bin/actool --platform iphoneos` drops them, and an iPhone app whose
+/// Assets.car carries them stalls in App Store processing.
+fn app_icon_idiom_applies(idiom: &str, sdk: &str) -> bool {
+    match sdk {
+        "macosx" => matches!(idiom, "mac" | "universal"),
+        "iphoneos" | "iphonesimulator" => {
+            matches!(
+                idiom,
+                "iphone" | "ipad" | "ios-marketing" | "car" | "universal"
+            )
+        }
+        "watchos" | "watchsimulator" => matches!(idiom, "watch" | "watch-marketing" | "universal"),
+        "appletvos" | "appletvsimulator" => matches!(idiom, "tv" | "tv-marketing" | "universal"),
+        _ => true,
     }
 }
 

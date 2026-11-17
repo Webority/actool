@@ -319,6 +319,39 @@ fn ios_appicon_renditions_carry_device_idiom() {
 }
 
 #[test]
+fn ios_appicon_drops_watch_and_mac_sizes() {
+    // Apple's actool ignores Watch and Mac sizes when compiling for iphoneos,
+    // so a set that lists them compiles to the same Assets.car as one that doesn't.
+    let ios_only = [
+        ("60x60", "2x", "iphone"),
+        ("1024x1024", "1x", "ios-marketing"),
+    ];
+    let compile = |name: &str, entries: &[(&str, &str, &str)]| {
+        let root = workspace_tmp(name);
+        build_appicon_catalog(&root, entries);
+        let out = root.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        compile_ios_icon(&root.join("A.xcassets"), &out);
+        std::fs::read(out.join("Assets.car")).expect("car")
+    };
+    let plain = compile("ios_appicon_ios_only", &ios_only);
+    let mixed = compile(
+        "ios_appicon_foreign_idioms",
+        &[
+            ios_only[0],
+            ios_only[1],
+            ("29x29", "2x", "watch"),
+            ("1024x1024", "1x", "watch-marketing"),
+            ("512x512", "2x", "mac"),
+        ],
+    );
+    assert!(
+        plain == mixed,
+        "Watch or Mac icon sizes changed an iPhone Assets.car"
+    );
+}
+
+#[test]
 fn ios_appicon_keyformat_adds_dim2_and_renditions_dont_collide() {
     let root = workspace_tmp("ios_appicon_keyformat");
     // Five iPhone @2x sizes that share idiom+scale and previously collided on a
