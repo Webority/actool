@@ -24,12 +24,13 @@ Open Rust fork of Apple's `actool` (upstream `viraptor/actool`): compiles `.xcas
 
 ## Tests
 
-- Keep every parity and regression test (`tests/*_parity.rs`, `*_regressions.rs`, `e2e_compile.rs`, `icon_bundle_*.rs`): each pins Xcode-matching output.
+- Keep every parity and regression test (`tests/*_parity.rs`, `*_regressions.rs`, `e2e_compile.rs`, `icon_bundle_*.rs`, `bom_tree.rs`): each pins Xcode-matching output. `bom_tree.rs` pins the multi-leaf BOM root layout that Apple's `assetutil` and App Store processing read; its `assetutil` case runs only on a Mac.
 - Add a new test only for Xcode-matching output; any other change ships without one.
 
 ## Rules
 
 - Keep the BOM inline-key region: fixed-key trees (RENDITIONS, APPEARANCEKEYS) pack rendition keys after the entry table, and a zero-filled or misplaced region makes every lookup return empty without an error (`bom.rs` `build_leaf_node`).
+- A tree past one leaf gets an interior root: (leaf, separator) pairs where the separator is the last key of the left leaf, then the inline keys; any other layout makes Apple's `assetutil` crash and App Store processing hang with no error (`bom.rs` `add_interior_node`).
 - CARHEADER coreUI version is 975 for `.icon`; lower values take the legacy path and lookups fail (`car::make_carheader_versioned`). Other catalogs use 972.
 - BITMAPKEYS lists every facet with a 52-byte attribute mask; an empty tree breaks every facet lookup (`icon_bundle::build_bitmapkeys`).
 - Color and Gradient rendition keys use `scale=1` though `scale_factor` is 0, because `colorWithName:displayGamut:` filters on the key.

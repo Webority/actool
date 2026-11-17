@@ -706,7 +706,7 @@ impl AssetCatalog {
                     identifier: ident,
                     element: car::ELEMENT_UNIVERSAL,
                     part: car::PART_REGULAR,
-                    scale: 1,
+                    scale: 0,
                     appearance,
                     direction,
                     layout: car::LAYOUT_PDF,

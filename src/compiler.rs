@@ -343,7 +343,7 @@ pub fn compile_catalog_with_icons(
         car::make_carheader_full(all_entries.len() as u32, coreui_ver, key_semantics),
     );
     bom.set_inline_key_size(Some(keyformat.len() * 2));
-    bom.add_tree("RENDITIONS", &all_entries, 4096);
+    bom.add_tree("RENDITIONS", &all_entries, 4096)?;
     bom.set_inline_key_size(None);
 
     let mut facetkey_entries: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
@@ -355,7 +355,7 @@ pub fn compile_catalog_with_icons(
         let value_data = car::make_facetkey_value(f.element, f.part, f.identifier);
         facetkey_entries.push((key_data, value_data));
     }
-    bom.add_tree("FACETKEYS", &facetkey_entries, 4096);
+    bom.add_tree("FACETKEYS", &facetkey_entries, 4096)?;
 
     let has_appearances = renditions.iter().any(|r| r.appearance != 0);
     if car::is_idiom_platform(platform) {
@@ -372,7 +372,7 @@ pub fn compile_catalog_with_icons(
         if uses(1) {
             ap_entries.push((b"UIAppearanceDark".to_vec(), 1u16.to_le_bytes().to_vec()));
         }
-        bom.add_tree("APPEARANCEKEYS", &ap_entries, 4096);
+        bom.add_tree("APPEARANCEKEYS", &ap_entries, 4096)?;
     } else if has_appearances {
         let mut ap_entries: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
         let mut v1 = Vec::new();
@@ -381,7 +381,7 @@ pub fn compile_catalog_with_icons(
         let mut v0 = Vec::new();
         v0.extend_from_slice(&0u16.to_le_bytes());
         ap_entries.push((b"NSAppearanceNameSystem".to_vec(), v0));
-        bom.add_tree("APPEARANCEKEYS", &ap_entries, 4096);
+        bom.add_tree("APPEARANCEKEYS", &ap_entries, 4096)?;
     }
 
     bom.add_named_block("KEYFORMAT", car::make_keyformat(&keyformat));
@@ -391,7 +391,7 @@ pub fn compile_catalog_with_icons(
     );
 
     let bitmap_entries = build_bitmapkeys(&facets, &all_entries, &keyformat);
-    bom.add_raw_key_tree("BITMAPKEYS", &bitmap_entries, 1024);
+    bom.add_raw_key_tree("BITMAPKEYS", &bitmap_entries, 1024)?;
 
     let produce_car = !all_entries.is_empty();
     let car_path = output_dir.join("Assets.car");

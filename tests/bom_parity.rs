@@ -12,9 +12,9 @@ fn matches_frozen_snapshot() {
         (b"key1".to_vec(), b"valA".to_vec()),
         (b"key2".to_vec(), b"valB".to_vec()),
     ];
-    bom.add_tree("TESTTREE", &entries, 4096);
+    bom.add_tree("TESTTREE", &entries, 4096).expect("TESTTREE");
     let raw: Vec<(u32, Vec<u8>)> = vec![(1, b"aaaa".to_vec()), (2, b"bbbb".to_vec())];
-    bom.add_raw_key_tree("RTBL", &raw, 1024);
+    bom.add_raw_key_tree("RTBL", &raw, 1024).expect("RTBL");
     let ours = bom.to_bytes();
 
     let reference_path = "tests/parity_references/bom_reference.bin";
