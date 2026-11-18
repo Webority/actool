@@ -21,7 +21,8 @@ Open Rust fork of Apple's `actool` (upstream `viraptor/actool`): compiles `.xcas
 - Structural diff: `python3 tools/compare_car.py <a> <b>` audits the BOM layout (inline keys, BITMAPKEYS, tree headers, named-block order).
 - Third-party repos: `tools/validate_repos.py --only <slug>`.
 - Reference: `/usr/bin/actool` on a Mac. Compile ours and Apple's into separate local subdirectories at the same `--minimum-deployment-target`, then diff. Never use shared `/tmp`.
-- Release route merge: a merge to main releases this repo, through the package publisher or its own release workflow.
+- Release route merge: a merge to main releases this repo; `.github/workflows/publish.yml` tags the `Cargo.toml` version on the merge commit and leaves an existing tag alone.
+- The `Cargo.toml` version is the release, `2.2.4-webority.<n>`: a release raises `<n>` there and in `CHANGELOG.md` in its `chore(release)` commit, and xos-tools pins that tag; never push a tag by hand.
 
 ## Tests
 

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The crate version is the release it ships, 2.2.4-webority.7, and a merge to main tags it: the Cargo.toml version is the one version of record for the 2.2.4-webority.<n> tags. (TASK-34771)
+
 ## [2.2.4-webority.7] - 17-Nov-2026
 
 ### Fixed

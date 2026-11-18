@@ -1,0 +1,31 @@
+name: publish
+
+# The merge of the release PR into main is the release: this job tags the Cargo.toml version (2.2.4-webority.<n>)
+# on the merge commit. A version already tagged is left alone. xos-tools pins actool by this tag and builds it from
+# source, so no binaries are built here.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: Webority/gh-actions/release-tag@v5
+        with:
+          version-file: Cargo.toml
+          version-format: cargo
+          tag-prefix: ""
+          token: ${{ secrets.GITHUB_TOKEN }}
