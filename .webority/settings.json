@@ -13,6 +13,7 @@
     "rust"
   ],
   "release": {
+    "route": "merge",
     "mode": "manual",
     "speed": "normal"
   },

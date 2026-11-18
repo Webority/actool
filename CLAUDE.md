@@ -21,6 +21,7 @@ Open Rust fork of Apple's `actool` (upstream `viraptor/actool`): compiles `.xcas
 - Structural diff: `python3 tools/compare_car.py <a> <b>` audits the BOM layout (inline keys, BITMAPKEYS, tree headers, named-block order).
 - Third-party repos: `tools/validate_repos.py --only <slug>`.
 - Reference: `/usr/bin/actool` on a Mac. Compile ours and Apple's into separate local subdirectories at the same `--minimum-deployment-target`, then diff. Never use shared `/tmp`.
+- Release route merge: a merge to main releases this repo, through the package publisher or its own release workflow.
 
 ## Tests
 
