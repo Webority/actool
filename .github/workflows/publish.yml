@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
           filter: blob:none
-      - uses: Webority/gh-actions/release-tag@v5
+      - uses: Webority/gh-actions/release-tag@v6
         with:
           version-file: Cargo.toml
           version-format: cargo
