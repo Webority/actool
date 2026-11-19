@@ -1,0 +1,54 @@
+# PR gate: a merge to main tags a release, so the version-of-record
+# (Cargo.toml -> [package] version) MUST be higher than main's.
+# Fails the PR otherwise. Runs only on PRs to main; never on development pushes.
+#
+# The number itself is named by a person in the chore(release) commit; this gate only
+# refuses to release an unchanged one. A red gate is a reason to propose a version, never
+# to bump the file so it goes green.
+name: version-check
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: version-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version-check:
+    runs-on: [self-hosted, linux]
+    steps:
+      # Shallow, then fetch exactly one commit of main: the whole job reads one file twice.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - uses: Webority/gh-actions/pr-checks@v6
+      - uses: Webority/gh-actions/workflow-lint@v6
+      - name: Fetch main
+        run: git fetch --depth=1 origin main
+      - name: Package version must increase vs main
+        run: |
+          set -euo pipefail
+          # First `version = "…"` under [package].
+          get() { awk '/^\[package\]/{f=1;next} /^\[/{f=0} f && /^version *=/{gsub(/.*= *"|".*/,""); print; exit}' "$1"; }
+          PR_VER=$(get Cargo.toml)
+          if git cat-file -e origin/main:Cargo.toml; then
+            MAIN_VER=$(git show origin/main:Cargo.toml | get /dev/stdin)
+          else
+            echo "main has no Cargo.toml yet (first setup); skipping."; exit 0
+          fi
+          echo "main=$MAIN_VER  PR=$PR_VER"
+          if [ -z "$PR_VER" ]; then
+            echo "::error::could not read [package] version from Cargo.toml"; exit 1
+          fi
+          if [ "$PR_VER" = "$MAIN_VER" ]; then
+            echo "::error::version ($PR_VER) is unchanged; a merge to main tags a release, so bump it."
+            exit 1
+          fi
+          HIGHER=$(printf '%s\n%s\n' "$MAIN_VER" "$PR_VER" | sort -V | tail -1)
+          if [ "$HIGHER" != "$PR_VER" ]; then
+            echo "::error::PR version $PR_VER is lower than main $MAIN_VER."
+            exit 1
+          fi
+          echo "OK: $MAIN_VER -> $PR_VER"
