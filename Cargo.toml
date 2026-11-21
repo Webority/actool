@@ -19,6 +19,7 @@ disallowed_methods = "deny"
 name = "actool"
 version = "2.2.4-webority.7"
 edition = "2024"
+rust-version = "1.100"
 description = "Open reimplementation of Apple's actool for compiling xcassets and icons"
 license = "MIT"
 
